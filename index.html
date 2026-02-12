@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nebula Studio Ultra</title>
+    
+    <!-- Dependencies -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+
+    <style>
+        :root {
+            --bg-dark: #09090b;
+            --panel-bg: #18181b;
+            --border: #27272a;
+            --accent: #6366f1;
+            --text-main: #e4e4e7;
+            --text-dim: #a1a1aa;
+        }
+
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+
+        /* Scrollbars */
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: var(--bg-dark); }
+        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 5px; border: 2px solid var(--bg-dark); }
+        ::-webkit-scrollbar-thumb:hover { background: #52525b; }
+
+
+        /* Layout Components */
+        .glass-panel {
+            background: rgba(24, 24, 27, 0.7);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+
+        /* Project Cards */
+        .project-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.5rem;
+            padding: 2rem;
+        }
+
+
+        .project-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            group: cursor-pointer;
+        }
+
+
+        .project-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--accent);
+            box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.3);
+        }
+
+
+        .card-preview {
+            height: 160px;
+            background: #000;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        
+        .card-preview::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to top, rgba(24,24,27,1), transparent);
+        }
+
+
+        /* Editor Layout */
+        #ide-container { display: flex; flex: 1; overflow: hidden; height: 100%; }
+        
+        .sidebar { width: 260px; background: #101012; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+        
+        .editor-area { flex: 1; display: flex; flex-direction: column; min-width: 0; background: #0c0c0e; position: relative; }
+        
+        .preview-area { 
+            width: 0%; 
+            background: #fff; 
+            display: flex; 
+            flex-direction: column; 
+            border-left: 1px solid var(--border);
+            transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            position: relative;
+        }
+
+
+        /* Code Editor */
+        .editor-wrapper { position: relative; flex: 1; overflow: hidden; display: flex; }
+        
+        .gutter {
+            width: 48px;
+            background: #101012;
+            color: #52525b;
+            text-align: right;
+            padding: 20px 8px 0 0;
+            font-size: 13px;
+            line-height: 1.5;
+            user-select: none;
+            border-right: 1px solid var(--border);
+        }
+
+
+        #editing-layer, #highlighting-layer {
+            position: absolute; top: 0; left: 0;
+            margin: 0; padding: 20px;
+            width: 100%; height: 100%;
+            font-size: 13px; line-height: 1.5;
+            white-space: pre; word-wrap: normal; overflow: auto;
+        }
+
+
+        #editing-layer {
+            z-index: 2; color: transparent; background: transparent;
+            caret-color: var(--accent); border: none; outline: none; resize: none;
+        }
+        #highlighting-layer { z-index: 1; pointer-events: none; }
+
+
+        /* Console */
+        .console-panel {
+            height: 150px;
+            background: #09090b;
+            border-top: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .console-logs {
+            flex: 1;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            padding: 8px;
+        }
+
+
+        .log-entry { padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .log-info { color: #a1a1aa; }
+        .log-error { color: #f87171; background: rgba(248, 113, 113, 0.1); }
+        .log-warn { color: #facc15; }
+
+
+        /* Resizer */
+        #resizer {
+            width: 4px;
+            background: transparent;
+            cursor: col-resize;
+            z-index: 50;
+            margin-left: -2px;
+            transition: background 0.2s;
+        }
+        #resizer:hover { background: var(--accent); }
+
+
+        /* Animations */
+        @keyframes star-pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+        .star { animation: star-pulse 3s infinite; }
+    </style>
+</head>
+<body>
+
+
+    <!-- App Header -->
+    <header class="h-14 glass-panel flex items-center justify-between px-6 z-40">
+        <div class="flex items-center gap-3 cursor-pointer group" onclick="showHome()">
+            <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg group-hover:scale-105 transition-transform">
+                N
+            </div>
+            <span class="font-semibold text-lg tracking-tight">Nebula<span class="font-light text-indigo-400">Studio</span></span>
+        </div>
+
+
+        <div id="toolbar" class="hidden flex items-center gap-3">
+            <div class="h-6 w-px bg-white/10 mx-2"></div>
+            <button onclick="runProject()" class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded-md text-xs font-bold transition-colors shadow-lg shadow-indigo-500/20">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> RUN
+            </button>
+            <button onclick="exportProject()" class="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-1.5 rounded-md text-xs font-bold transition-colors border border-zinc-700">
+                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg> EXPORT
+            </button>
+            <button onclick="togglePreview(true)" class="p-2 text-zinc-400 hover:text-white rounded-md hover:bg-zinc-800 transition-colors" title="Full Screen">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+            </button>
+        </div>
+    </header>
+
+
+    <!-- 1. Home Screen (Gallery) -->
+    <main id="view-home" class="flex-1 overflow-y-auto bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-800 via-zinc-950 to-black">
+        <div class="max-w-7xl mx-auto p-8">
+            <div class="flex justify-between items-end mb-12">
+                <div>
+                    <h1 class="text-4xl font-bold text-white mb-2">Projects</h1>
+                    <p class="text-zinc-400">Manage your experiments and applications.</p>
+                </div>
+                <button onclick="createNewProject()" class="bg-white text-black hover:bg-zinc-200 px-6 py-3 rounded-full font-bold transition-all transform active:scale-95 shadow-xl">
+                    + New Project
+                </button>
+            </div>
+
+
+            <div id="project-list" class="project-grid">
+                <!-- Cards Injected Here -->
+            </div>
+        </div>
+    </main>
+
+
+    <!-- 2. IDE View -->
+    <main id="view-ide" class="hidden flex-1 relative">
+        <div id="ide-container">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <div class="p-4 border-b border-[#27272a] flex justify-between items-center">
+                    <span class="text-xs font-bold text-zinc-500 uppercase tracking-wider">Explorer</span>
+                    <div class="flex gap-1">
+                        <button onclick="fileInput.click()" class="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white transition-colors"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg></button>
+                        <button onclick="addNewFile()" class="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white transition-colors"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg></button>
+                    </div>
+                </div>
+                <input type="file" id="fileInput" multiple class="hidden">
+                <div id="file-list" class="flex-1 overflow-y-auto py-2"></div>
+            </aside>
+
+
+            <!-- Editor -->
+            <section class="editor-area">
+                <!-- File Tabs / Header -->
+                <div class="h-10 bg-[#141417] border-b border-[#27272a] flex items-center justify-between px-4">
+                    <div class="flex items-center gap-2 text-xs">
+                        <span class="text-zinc-500">Editing:</span>
+                        <span id="active-filename" class="text-indigo-400 font-mono font-bold">index.html</span>
+                    </div>
+                    <select id="file-strategy" class="bg-[#18181b] border border-[#27272a] text-[10px] rounded px-2 py-1 text-zinc-400 focus:border-indigo-500 outline-none">
+                        <option value="classic">Classic Script</option>
+                        <option value="module">ES Module</option>
+                    </select>
+                </div>
+
+
+                <div class="editor-wrapper">
+                    <div id="gutter" class="gutter font-mono"></div>
+                    <div id="editor-container" class="relative flex-1">
+                        <textarea id="editing-layer" class="font-mono" spellcheck="false"></textarea>
+                        <pre id="highlighting-layer" class="font-mono"><code id="code-content"></code></pre>
+                    </div>
+                </div>
+
+
+                <!-- Console -->
+                <div class="console-panel">
+                    <div class="h-8 bg-[#141417] border-b border-[#27272a] flex items-center justify-between px-4">
+                        <span class="text-[10px] font-bold text-zinc-500 uppercase">Terminal / Console</span>
+                        <button onclick="clearConsole()" class="text-[10px] text-zinc-500 hover:text-white">CLEAR</button>
+                    </div>
+                    <div id="console-logs" class="console-logs"></div>
+                </div>
+            </section>
+
+
+            <!-- Resizer Handle -->
+            <div id="resizer"></div>
+
+
+            <!-- Preview -->
+            <section id="preview-panel" class="preview-area">
+                <div class="h-10 bg-zinc-100 border-b border-zinc-300 flex items-center justify-between px-4">
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                        <span class="text-xs font-bold text-zinc-600">Live Server</span>
+                    </div>
+                    <button onclick="closePreview()" class="text-zinc-400 hover:text-red-500">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+                <iframe id="preview-frame" class="flex-1 w-full border-none"></iframe>
+            </section>
+        </div>
+    </main>
+
+
+    <!-- Logic -->
+    <script>
+        // --- CONSTANTS ---
+        const DEFAULT_PROJECT = {
+            id: null,
+            name: "Nebula Welcome",
+            lastModified: Date.now(),
+            files: [
+                {
+                    name: "index.html",
+                    strategy: "classic",
+                    content: `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Welcome to Nebula</title>
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+    <canvas id="starfield"></canvas>
+    <div class="container">
+        <h1 id="title">Welcome</h1>
+        <p class="subtitle">To Nebula Studio Ultra</p>
+        <div id="dynamic-text">Loading Modules...</div>
+    </div>
+    <script type="module" src="./main.js"><\/script>
+</body>
+</html>`
+                },
+                {
+                    name: "style.css",
+                    strategy: "classic",
+                    content: `body {
+    margin: 0;
+    overflow: hidden;
+    background: #050505;
+    color: white;
+    font-family: 'Segoe UI', sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+
+canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 0;
+}
+
+
+.container {
+    position: relative;
+    z-index: 10;
+    text-align: center;
+    background: rgba(0,0,0,0.4);
+    backdrop-filter: blur(10px);
+    padding: 3rem 5rem;
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    animation: fadeIn 2s ease-out;
+}
+
+
+h1 {
+    font-size: 5rem;
+    margin: 0;
+    background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -2px;
+}
+
+
+.subtitle {
+    color: #94a3b8;
+    font-size: 1.2rem;
+    margin-top: 10px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+}
+
+
+#dynamic-text {
+    margin-top: 2rem;
+    font-family: monospace;
+    color: #6366f1;
+}
+
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}`
+                },
+                {
+                    name: "main.js",
+                    strategy: "module",
+                    content: `import { initStars } from './starfield.js';
+import { typeText } from './utils.js';
+
+
+console.log("System: Booting Nebula...");
+
+
+// 1. Initialize Background
+initStars('starfield');
+
+
+// 2. Run Dynamic Text Animation
+setTimeout(() => {
+    const el = document.getElementById('dynamic-text');
+    typeText(el, ">> Modules Imported Successfully_");
+    console.log("System: Modules loaded.");
+}, 1000);`
+                },
+                {
+                    name: "starfield.js",
+                    strategy: "module",
+                    content: `export function initStars(canvasId) {
+    const canvas = document.getElementById(canvasId);
+    const ctx = canvas.getContext('2d');
+    
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+
+    const stars = Array(200).fill().map(() => ({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        size: Math.random() * 2,
+        speed: Math.random() * 0.5 + 0.1
+    }));
+
+
+    function animate() {
+        ctx.fillStyle = 'rgba(5, 5, 5, 0.2)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = '#fff';
+        stars.forEach(star => {
+            star.y -= star.speed;
+            if(star.y < 0) star.y = canvas.height;
+            
+            ctx.beginPath();
+            ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        requestAnimationFrame(animate);
+    }
+    animate();
+}`
+                },
+                {
+                    name: "utils.js",
+                    strategy: "module",
+                    content: `export function typeText(element, text) {
+    element.innerText = "";
+    let i = 0;
+    const interval = setInterval(() => {
+        element.innerText += text[i];
+        i++;
+        if (i === text.length) clearInterval(interval);
+    }, 50);
+}`
+                }
+            ]
+        };
+
+
+        // --- STATE MANAGEMENT ---
+        let projects = JSON.parse(localStorage.getItem('nebula_ultra_projects')) || [];
+        if (projects.length === 0) {
+            // Init with default project if empty
+            const initProj = JSON.parse(JSON.stringify(DEFAULT_PROJECT));
+            initProj.id = 'proj-' + Date.now();
+            projects.push(initProj);
+            localStorage.setItem('nebula_ultra_projects', JSON.stringify(projects));
+        }
+
+
+        let currentProject = null;
+        let activeFileIndex = 0;
+
+
+        // --- DOM ELEMENTS ---
+        const dom = {
+            home: document.getElementById('view-home'),
+            ide: document.getElementById('view-ide'),
+            projectList: document.getElementById('project-list'),
+            fileList: document.getElementById('file-list'),
+            editor: document.getElementById('editing-layer'),
+            highlighter: document.getElementById('highlighting-layer'),
+            codeContent: document.getElementById('code-content'),
+            gutter: document.getElementById('gutter'),
+            previewPanel: document.getElementById('preview-panel'),
+            previewFrame: document.getElementById('preview-frame'),
+            console: document.getElementById('console-logs'),
+            filename: document.getElementById('active-filename'),
+            strategy: document.getElementById('file-strategy'),
+            toolbar: document.getElementById('toolbar'),
+            resizer: document.getElementById('resizer')
+        };
+
+
+        // --- NAVIGATION ---
+        function showHome() {
+            dom.ide.classList.add('hidden');
+            dom.home.classList.remove('hidden');
+            dom.toolbar.classList.add('hidden');
+            renderProjectGrid();
+        }
+
+
+        function openProject(id) {
+            currentProject = projects.find(p => p.id === id);
+            currentProject.lastModified = Date.now();
+            saveData();
+            
+            dom.home.classList.add('hidden');
+            dom.ide.classList.remove('hidden');
+            dom.toolbar.classList.remove('hidden');
+            
+            activeFileIndex = 0;
+            renderFileList();
+            loadEditor();
+        }
+
+
+        function createNewProject() {
+            const newP = JSON.parse(JSON.stringify(DEFAULT_PROJECT));
+            newP.id = 'proj-' + Date.now();
+            newP.name = "Untitled Project " + (projects.length + 1);
+            projects.unshift(newP);
+            saveData();
+            openProject(newP.id);
+        }
+
+
+        // --- RENDERERS ---
+        function renderProjectGrid() {
+            dom.projectList.innerHTML = '';
+            projects.sort((a,b) => b.lastModified - a.lastModified).forEach(p => {
+                const el = document.createElement('div');
+                el.className = 'project-card group';
+                el.onclick = () => openProject(p.id);
+                el.innerHTML = `
+                    <div class="card-preview">
+                        <div class="text-6xl opacity-20 animate-pulse text-indigo-500 font-mono">&lt;/&gt;</div>
+                    </div>
+                    <div class="p-4">
+                        <h3 class="font-bold text-white group-hover:text-indigo-400 transition-colors">${p.name}</h3>
+                        <p class="text-xs text-zinc-500 mt-1">${p.files.length} Files • ${new Date(p.lastModified).toLocaleDateString()}</p>
+                        <div class="mt-4 flex justify-end">
+                            <button onclick="deleteProject(event, '${p.id}')" class="text-zinc-600 hover:text-red-500 text-xs px-2 py-1 rounded hover:bg-zinc-800 transition-colors">DELETE</button>
+                        </div>
+                    </div>
+                `;
+                dom.projectList.appendChild(el);
+            });
+        }
+
+
+        function renderFileList() {
+            dom.fileList.innerHTML = '';
+            currentProject.files.forEach((f, i) => {
+                const el = document.createElement('div');
+                const ext = f.name.split('.').pop();
+                let iconColor = ext === 'html' ? 'text-orange-500' : (ext === 'css' ? 'text-blue-400' : 'text-yellow-400');
+                
+                el.className = `px-4 py-2 text-sm cursor-pointer flex justify-between items-center group border-l-2 ${i === activeFileIndex ? 'border-indigo-500 bg-[#18181b] text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-[#18181b]'}`;
+                el.innerHTML = `
+                    <div class="flex items-center gap-2 overflow-hidden">
+                        <span class="${iconColor} font-mono text-xs opacity-80">${ext.toUpperCase()}</span>
+                        <span class="truncate" ondblclick="renameFile(${i})">${f.name}</span>
+                    </div>
+                    <button onclick="deleteFile(event, ${i})" class="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-500 px-1">×</button>
+                `;
+                el.onclick = () => {
+                    activeFileIndex = i;
+                    renderFileList();
+                    loadEditor();
+                };
+                dom.fileList.appendChild(el);
+            });
+        }
+
+
+        // --- EDITOR LOGIC ---
+        function loadEditor() {
+            const file = currentProject.files[activeFileIndex];
+            dom.editor.value = file.content;
+            dom.filename.innerText = file.name;
+            dom.strategy.value = file.strategy || (file.name.endsWith('.js') ? 'module' : 'classic');
+            // Show/Hide strategy dropdown based on file type
+            dom.strategy.style.display = file.name.endsWith('.js') ? 'block' : 'none';
+            
+            updateHighlight();
+        }
+
+
+        function updateHighlight() {
+            const code = dom.editor.value;
+            const file = currentProject.files[activeFileIndex];
+            file.content = code;
+            saveData();
+
+
+            // Syntax Highlight
+            const ext = file.name.split('.').pop();
+            const lang = ext === 'js' ? 'javascript' : (ext === 'html' ? 'markup' : 'css');
+            dom.codeContent.className = `language-${lang}`;
+            dom.codeContent.textContent = code; // Prism escapes html automatically
+            Prism.highlightElement(dom.codeContent);
+
+
+            // Gutter
+            const lines = code.split('\n').length;
+            dom.gutter.innerHTML = Array.from({length: lines}, (_, i) => i + 1).join('<br>');
+        }
+
+
+        function syncScroll() {
+            dom.highlighter.scrollTop = dom.editor.scrollTop;
+            dom.highlighter.scrollLeft = dom.editor.scrollLeft;
+            dom.gutter.scrollTop = dom.editor.scrollTop;
+        }
+
+
+        // --- COMPILER ENGINE ---
+        async function runProject() {
+            dom.console.innerHTML = ''; // Clear console
+            logToConsole('System', 'Bundling files...');
+
+
+            const urlMap = {};
+            const files = currentProject.files;
+
+
+            // 1. Create Blob URLs for everything
+            files.forEach(f => {
+                const type = f.name.endsWith('.css') ? 'text/css' : (f.name.endsWith('.js') ? 'application/javascript' : 'text/html');
+                urlMap[f.name] = URL.createObjectURL(new Blob([f.content], { type }));
+            });
+
+
+            // 2. Resolve Module Imports in JS files
+            const resolvedBlobs = {};
+            files.forEach(f => {
+                if(f.name.endsWith('.js') && f.strategy === 'module') {
+                    // Regex to find: import ... from "./filename.js"
+                    let code = f.content.replace(/(from\s+['"])(\.\/)?(.*?)(['"])/g, (match, p1, p2, filename, p4) => {
+                        if(urlMap[filename]) {
+                            return `${p1}${urlMap[filename]}${p4}`;
+                        }
+                        return match;
+                    });
+                    resolvedBlobs[f.name] = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }));
+                } else {
+                    resolvedBlobs[f.name] = urlMap[f.name];
+                }
+            });
+
+
+            // 3. Prepare HTML
+            const index = files.find(f => f.name === 'index.html') || files[0];
+            let html = index.content;
+
+
+            // 4. Inject Console Interceptor
+            const consoleScript = `
+                <script>
+                    window.onerror = function(msg, url, line) {
+                        window.parent.postMessage({type: 'error', msg: msg, line: line}, '*');
+                    };
+                    const oldLog = console.log;
+                    console.log = function(...args) {
+                        window.parent.postMessage({type: 'log', msg: args.join(' ')}, '*');
+                        oldLog.apply(console, args);
+                    };
+                <\/script>
+            `;
+
+
+            // 5. Inject CSS & JS tags dynamically
+            let injections = consoleScript;
+            files.forEach(f => {
+                if(f.name === 'index.html') return;
+                
+                if(f.name.endsWith('.css')) {
+                    // Inject CSS directly to ensure it loads
+                    injections += `<style>${f.content}</style>`;
+                } else if(f.name.endsWith('.js')) {
+                    // Inject Scripts
+                    const src = resolvedBlobs[f.name];
+                    const isModule = f.strategy === 'module';
+                    injections += `<script src="${src}" ${isModule ? 'type="module"' : ''}><\/script>`;
+                }
+            });
+
+
+            // Insert before closing body or at end
+            if(html.includes('</body>')) {
+                html = html.replace('</body>', injections + '</body>');
+            } else {
+                html += injections;
+            }
+
+
+            // 6. Render
+            const finalBlob = new Blob([html], {type: 'text/html'});
+            dom.previewFrame.src = URL.createObjectURL(finalBlob);
+            
+            // Open Preview Pane
+            dom.previewPanel.style.width = '45%';
+            logToConsole('System', 'Application Started.');
+        }
+
+
+        // --- UTILS ---
+        function deleteProject(e, id) {
+            e.stopPropagation();
+            if(!confirm("Delete this project?")) return;
+            projects = projects.filter(p => p.id !== id);
+            saveData();
+            renderProjectGrid();
+        }
+
+
+        function renameFile(idx) {
+            const newName = prompt("Rename file:", currentProject.files[idx].name);
+            if(newName) {
+                currentProject.files[idx].name = newName;
+                saveData();
+                renderFileList();
+            }
+        }
+
+
+        function deleteFile(e, idx) {
+            e.stopPropagation();
+            if(currentProject.files.length <= 1) return alert("Cannot delete the last file.");
+            currentProject.files.splice(idx, 1);
+            activeFileIndex = 0;
+            saveData();
+            renderFileList();
+            loadEditor();
+        }
+
+
+        function addNewFile() {
+            const name = prompt("Enter file name (e.g. script.js):", "new.js");
+            if(name) {
+                currentProject.files.push({ name, content: '', strategy: name.endsWith('.js') ? 'module' : 'classic' });
+                saveData();
+                renderFileList();
+                activeFileIndex = currentProject.files.length - 1;
+                loadEditor();
+            }
+        }
+
+
+        function saveData() {
+            localStorage.setItem('nebula_ultra_projects', JSON.stringify(projects));
+        }
+
+
+        function exportProject() {
+            const zip = new JSZip();
+            currentProject.files.forEach(f => zip.file(f.name, f.content));
+            zip.generateAsync({type:"blob"}).then(function(content) {
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(content);
+                a.download = currentProject.name.replace(/\s+/g, '_') + ".zip";
+                a.click();
+            });
+        }
+
+
+        function logToConsole(type, msg) {
+            const div = document.createElement('div');
+            div.className = `log-entry ${type === 'error' ? 'log-error' : (type === 'warn' ? 'log-warn' : 'log-info')}`;
+            div.innerHTML = `<span class="opacity-50">[${new Date().toLocaleTimeString()}]</span> ${msg}`;
+            dom.console.appendChild(div);
+            dom.console.scrollTop = dom.console.scrollHeight;
+        }
+
+
+        function clearConsole() { dom.console.innerHTML = ''; }
+        function togglePreview(external) {
+             if(external && dom.previewFrame.src) window.open(dom.previewFrame.src, '_blank');
+        }
+        function closePreview() { dom.previewPanel.style.width = '0%'; }
+
+
+        // --- EVENT LISTENERS ---
+        dom.editor.addEventListener('input', updateHighlight);
+        dom.editor.addEventListener('scroll', syncScroll);
+        dom.editor.addEventListener('keydown', e => {
+            if(e.key === 'Tab') {
+                e.preventDefault();
+                const start = dom.editor.selectionStart;
+                const end = dom.editor.selectionEnd;
+                dom.editor.value = dom.editor.value.substring(0, start) + "  " + dom.editor.value.substring(end);
+                dom.editor.selectionStart = dom.editor.selectionEnd = start + 2;
+                updateHighlight();
+            }
+            if((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                runProject();
+            }
+        });
+
+
+        dom.strategy.addEventListener('change', (e) => {
+            currentProject.files[activeFileIndex].strategy = e.target.value;
+            saveData();
+        });
+
+
+        dom.fileInput.addEventListener('change', (e) => {
+            Array.from(e.target.files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    currentProject.files.push({
+                        name: file.name,
+                        content: ev.target.result,
+                        strategy: file.name.endsWith('.js') ? 'module' : 'classic'
+                    });
+                    renderFileList();
+                    saveData();
+                };
+                reader.readAsText(file);
+            });
+        });
+
+
+        window.addEventListener('message', e => {
+            if(e.data.type === 'log') logToConsole('info', e.data.msg);
+            if(e.data.type === 'error') logToConsole('error', e.data.msg + (e.data.line ? ` (Line ${e.data.line})` : ''));
+        });
+
+
+        // Resizer Logic
+        let isResizing = false;
+        dom.resizer.addEventListener('mousedown', () => isResizing = true);
+        document.addEventListener('mousemove', e => {
+            if(!isResizing) return;
+            const w = document.body.clientWidth - e.clientX;
+            const percent = (w / document.body.clientWidth) * 100;
+            if(percent > 10 && percent < 90) dom.previewPanel.style.width = percent + '%';
+        });
+        document.addEventListener('mouseup', () => isResizing = false);
+
+
+        // Init
+        renderProjectGrid();
+    </script>
+</body>
+</html>
+
+
+Ti
+
