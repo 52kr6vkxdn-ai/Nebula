@@ -13,6 +13,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-css.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <!-- Compression for URL Sharing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
 
@@ -31,7 +34,7 @@
             background-color: var(--bg-dark);
             color: var(--text-main);
             font-family: 'Inter', sans-serif;
-            overflow: hidden;
+            overflow: hidden; /* Critical: prevents body growth */
             height: 100vh;
             display: flex;
             flex-direction: column;
@@ -72,7 +75,9 @@
             overflow: hidden;
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
-            group: cursor-pointer;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
         }
 
 
@@ -91,14 +96,19 @@
             align-items: center;
             justify-content: center;
             overflow: hidden;
+            border-bottom: 1px solid var(--border);
         }
         
-        .card-preview::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(to top, rgba(24,24,27,1), transparent);
+        .card-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.8;
+            transition: opacity 0.3s;
         }
+
+
+        .project-card:hover .card-preview img { opacity: 1; }
 
 
         /* Editor Layout */
@@ -116,11 +126,17 @@
             border-left: 1px solid var(--border);
             transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
             position: relative;
+            overflow: hidden; /* Ensures iframe doesn't push bounds */
         }
 
 
         /* Code Editor */
-        .editor-wrapper { position: relative; flex: 1; overflow: hidden; display: flex; }
+        .editor-wrapper { 
+            position: relative; 
+            flex: 1; 
+            overflow: hidden; /* Contains scrollbars */
+            display: flex; 
+        }
         
         .gutter {
             width: 48px;
@@ -132,23 +148,66 @@
             line-height: 1.5;
             user-select: none;
             border-right: 1px solid var(--border);
+            overflow: hidden;
         }
 
 
+        /* Both layers must match perfectly */
         #editing-layer, #highlighting-layer {
             position: absolute; top: 0; left: 0;
             margin: 0; padding: 20px;
             width: 100%; height: 100%;
             font-size: 13px; line-height: 1.5;
-            white-space: pre; word-wrap: normal; overflow: auto;
+            white-space: pre; word-wrap: normal;
+            border: none; outline: none;
         }
 
 
         #editing-layer {
-            z-index: 2; color: transparent; background: transparent;
-            caret-color: var(--accent); border: none; outline: none; resize: none;
+            z-index: 2; 
+            color: transparent; 
+            background: transparent;
+            caret-color: var(--accent); 
+            resize: none;
+            overflow: auto; /* Scrollable */
         }
-        #highlighting-layer { z-index: 1; pointer-events: none; }
+
+
+        #highlighting-layer { 
+            z-index: 1; 
+            pointer-events: none; 
+            overflow: hidden; /* No scroll bars on highlight */
+        }
+
+
+        /* Scroll to Top Button */
+        #scroll-top-btn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 10;
+            background: var(--accent);
+            color: white;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.2s;
+            cursor: pointer;
+            pointer-events: none;
+        }
+
+
+        #scroll-top-btn.visible {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
 
 
         /* Console */
@@ -187,25 +246,52 @@
         #resizer:hover { background: var(--accent); }
 
 
-        /* Animations */
-        @keyframes star-pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
-        .star { animation: star-pulse 3s infinite; }
+        /* Editable Project Name */
+        #project-name-input {
+            background: transparent;
+            border: 1px solid transparent;
+            color: white;
+            font-size: 1.125rem;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 4px;
+            width: 200px;
+            transition: all 0.2s;
+        }
+        #project-name-input:hover { border-color: #3f3f46; }
+        #project-name-input:focus { 
+            border-color: var(--accent); 
+            outline: none; 
+            background: #18181b;
+        }
     </style>
 </head>
 <body>
 
 
     <!-- App Header -->
-    <header class="h-14 glass-panel flex items-center justify-between px-6 z-40">
-        <div class="flex items-center gap-3 cursor-pointer group" onclick="showHome()">
-            <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg group-hover:scale-105 transition-transform">
-                N
+    <header class="h-14 glass-panel flex items-center justify-between px-6 z-40 shrink-0">
+        <div class="flex items-center gap-4">
+            <div class="flex items-center gap-3 cursor-pointer group" onclick="showHome()">
+                <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg group-hover:scale-105 transition-transform">
+                    N
+                </div>
             </div>
-            <span class="font-semibold text-lg tracking-tight">Nebula<span class="font-light text-indigo-400">Studio</span></span>
+            <!-- Dynamic Project Name / Home Title -->
+            <div id="header-title-area" class="hidden flex items-center gap-2">
+                <span class="text-zinc-600">/</span>
+                <input type="text" id="project-name-input" value="Untitled Project" onchange="updateProjectName(this.value)">
+            </div>
+            <div id="home-title-area">
+                <span class="font-semibold text-lg tracking-tight">Nebula<span class="font-light text-indigo-400">Studio</span></span>
+            </div>
         </div>
 
 
         <div id="toolbar" class="hidden flex items-center gap-3">
+            <button onclick="shareProject()" class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 rounded-md text-xs font-bold transition-colors shadow-lg shadow-emerald-900/20" title="Get Shareable Link">
+                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg> SHARE
+            </button>
             <div class="h-6 w-px bg-white/10 mx-2"></div>
             <button onclick="runProject()" class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded-md text-xs font-bold transition-colors shadow-lg shadow-indigo-500/20">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> RUN
@@ -242,18 +328,18 @@
 
 
     <!-- 2. IDE View -->
-    <main id="view-ide" class="hidden flex-1 relative">
+    <main id="view-ide" class="hidden flex-1 relative min-h-0">
         <div id="ide-container">
             <!-- Sidebar -->
             <aside class="sidebar">
                 <div class="p-4 border-b border-[#27272a] flex justify-between items-center">
                     <span class="text-xs font-bold text-zinc-500 uppercase tracking-wider">Explorer</span>
                     <div class="flex gap-1">
-                        <button onclick="fileInput.click()" class="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white transition-colors"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg></button>
-                        <button onclick="addNewFile()" class="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white transition-colors"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg></button>
+                        <button onclick="triggerUpload()" class="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white transition-colors" title="Upload Files"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg></button>
+                        <button onclick="addNewFile()" class="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white transition-colors" title="New File"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg></button>
                     </div>
                 </div>
-                <input type="file" id="fileInput" multiple class="hidden">
+                <input type="file" id="fileInput" multiple accept=".html,.css,.js,.txt,.json" class="hidden">
                 <div id="file-list" class="flex-1 overflow-y-auto py-2"></div>
             </aside>
 
@@ -261,7 +347,7 @@
             <!-- Editor -->
             <section class="editor-area">
                 <!-- File Tabs / Header -->
-                <div class="h-10 bg-[#141417] border-b border-[#27272a] flex items-center justify-between px-4">
+                <div class="h-10 bg-[#141417] border-b border-[#27272a] flex items-center justify-between px-4 shrink-0">
                     <div class="flex items-center gap-2 text-xs">
                         <span class="text-zinc-500">Editing:</span>
                         <span id="active-filename" class="text-indigo-400 font-mono font-bold">index.html</span>
@@ -278,12 +364,17 @@
                     <div id="editor-container" class="relative flex-1">
                         <textarea id="editing-layer" class="font-mono" spellcheck="false"></textarea>
                         <pre id="highlighting-layer" class="font-mono"><code id="code-content"></code></pre>
+                        
+                        <!-- Scroll Top Button -->
+                        <div id="scroll-top-btn" onclick="scrollToTop()">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+                        </div>
                     </div>
                 </div>
 
 
                 <!-- Console -->
-                <div class="console-panel">
+                <div class="console-panel shrink-0">
                     <div class="h-8 bg-[#141417] border-b border-[#27272a] flex items-center justify-between px-4">
                         <span class="text-[10px] font-bold text-zinc-500 uppercase">Terminal / Console</span>
                         <button onclick="clearConsole()" class="text-[10px] text-zinc-500 hover:text-white">CLEAR</button>
@@ -299,7 +390,7 @@
 
             <!-- Preview -->
             <section id="preview-panel" class="preview-area">
-                <div class="h-10 bg-zinc-100 border-b border-zinc-300 flex items-center justify-between px-4">
+                <div class="h-10 bg-zinc-100 border-b border-zinc-300 flex items-center justify-between px-4 shrink-0">
                     <div class="flex items-center gap-2">
                         <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
                         <span class="text-xs font-bold text-zinc-600">Live Server</span>
@@ -308,7 +399,10 @@
                         <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                 </div>
-                <iframe id="preview-frame" class="flex-1 w-full border-none"></iframe>
+                <!-- Wrapper for capturing -->
+                <div id="preview-wrapper" class="w-full h-full relative overflow-hidden">
+                    <iframe id="preview-frame" class="w-full h-full border-none block"></iframe>
+                </div>
             </section>
         </div>
     </main>
@@ -319,7 +413,8 @@
         // --- CONSTANTS ---
         const DEFAULT_PROJECT = {
             id: null,
-            name: "Nebula Welcome",
+            name: "New Project",
+            thumbnail: null,
             lastModified: Date.now(),
             files: [
                 {
@@ -329,17 +424,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Welcome to Nebula</title>
+    <title>My App</title>
     <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-    <canvas id="starfield"></canvas>
-    <div class="container">
-        <h1 id="title">Welcome</h1>
-        <p class="subtitle">To Nebula Studio Ultra</p>
-        <div id="dynamic-text">Loading Modules...</div>
+    <div class="center-box">
+        <h1>Hello World</h1>
+        <p>Edit me in Nebula Studio</p>
     </div>
-    <script type="module" src="./main.js"><\/script>
+    <script src="./main.js"><\/script>
 </body>
 </html>`
                 },
@@ -348,140 +441,26 @@
                     strategy: "classic",
                     content: `body {
     margin: 0;
-    overflow: hidden;
-    background: #050505;
-    color: white;
-    font-family: 'Segoe UI', sans-serif;
+    font-family: sans-serif;
+    background: #f4f4f5;
     display: flex;
     justify-content: center;
     align-items: center;
     height: 100vh;
 }
-
-
-canvas {
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 0;
-}
-
-
-.container {
-    position: relative;
-    z-index: 10;
+.center-box {
     text-align: center;
-    background: rgba(0,0,0,0.4);
-    backdrop-filter: blur(10px);
-    padding: 3rem 5rem;
-    border-radius: 20px;
-    border: 1px solid rgba(255,255,255,0.1);
-    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-    animation: fadeIn 2s ease-out;
+    background: white;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
-
-
-h1 {
-    font-size: 5rem;
-    margin: 0;
-    background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    letter-spacing: -2px;
-}
-
-
-.subtitle {
-    color: #94a3b8;
-    font-size: 1.2rem;
-    margin-top: 10px;
-    letter-spacing: 4px;
-    text-transform: uppercase;
-}
-
-
-#dynamic-text {
-    margin-top: 2rem;
-    font-family: monospace;
-    color: #6366f1;
-}
-
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
-}`
+h1 { color: #4f46e5; }`
                 },
                 {
                     name: "main.js",
-                    strategy: "module",
-                    content: `import { initStars } from './starfield.js';
-import { typeText } from './utils.js';
-
-
-console.log("System: Booting Nebula...");
-
-
-// 1. Initialize Background
-initStars('starfield');
-
-
-// 2. Run Dynamic Text Animation
-setTimeout(() => {
-    const el = document.getElementById('dynamic-text');
-    typeText(el, ">> Modules Imported Successfully_");
-    console.log("System: Modules loaded.");
-}, 1000);`
-                },
-                {
-                    name: "starfield.js",
-                    strategy: "module",
-                    content: `export function initStars(canvasId) {
-    const canvas = document.getElementById(canvasId);
-    const ctx = canvas.getContext('2d');
-    
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-
-
-    const stars = Array(200).fill().map(() => ({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        size: Math.random() * 2,
-        speed: Math.random() * 0.5 + 0.1
-    }));
-
-
-    function animate() {
-        ctx.fillStyle = 'rgba(5, 5, 5, 0.2)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        ctx.fillStyle = '#fff';
-        stars.forEach(star => {
-            star.y -= star.speed;
-            if(star.y < 0) star.y = canvas.height;
-            
-            ctx.beginPath();
-            ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
-            ctx.fill();
-        });
-        requestAnimationFrame(animate);
-    }
-    animate();
-}`
-                },
-                {
-                    name: "utils.js",
-                    strategy: "module",
-                    content: `export function typeText(element, text) {
-    element.innerText = "";
-    let i = 0;
-    const interval = setInterval(() => {
-        element.innerText += text[i];
-        i++;
-        if (i === text.length) clearInterval(interval);
-    }, 50);
-}`
+                    strategy: "classic",
+                    content: `console.log("App Started!");`
                 }
             ]
         };
@@ -489,19 +468,7 @@ setTimeout(() => {
 
         // --- STATE MANAGEMENT ---
         let projects = JSON.parse(localStorage.getItem('nebula_ultra_projects')) || [];
-        if (projects.length === 0) {
-            // Init with default project if empty
-            const initProj = JSON.parse(JSON.stringify(DEFAULT_PROJECT));
-            initProj.id = 'proj-' + Date.now();
-            projects.push(initProj);
-            localStorage.setItem('nebula_ultra_projects', JSON.stringify(projects));
-        }
-
-
-        let currentProject = null;
-        let activeFileIndex = 0;
-
-
+        
         // --- DOM ELEMENTS ---
         const dom = {
             home: document.getElementById('view-home'),
@@ -518,8 +485,17 @@ setTimeout(() => {
             filename: document.getElementById('active-filename'),
             strategy: document.getElementById('file-strategy'),
             toolbar: document.getElementById('toolbar'),
-            resizer: document.getElementById('resizer')
+            resizer: document.getElementById('resizer'),
+            fileInput: document.getElementById('fileInput'),
+            projectNameInput: document.getElementById('project-name-input'),
+            headerTitleArea: document.getElementById('header-title-area'),
+            homeTitleArea: document.getElementById('home-title-area'),
+            scrollTopBtn: document.getElementById('scroll-top-btn')
         };
+
+
+        let currentProject = null;
+        let activeFileIndex = 0;
 
 
         // --- NAVIGATION ---
@@ -527,18 +503,38 @@ setTimeout(() => {
             dom.ide.classList.add('hidden');
             dom.home.classList.remove('hidden');
             dom.toolbar.classList.add('hidden');
+            
+            // Header Switch
+            dom.headerTitleArea.classList.add('hidden');
+            dom.homeTitleArea.classList.remove('hidden');
+
+
             renderProjectGrid();
         }
 
 
-        function openProject(id) {
-            currentProject = projects.find(p => p.id === id);
+        function openProject(id, loadedProject = null) {
+            if(loadedProject) {
+                currentProject = loadedProject;
+            } else {
+                currentProject = projects.find(p => p.id === id);
+            }
+            
+            if(!currentProject) return;
+
+
             currentProject.lastModified = Date.now();
             saveData();
             
+            // UI Switch
             dom.home.classList.add('hidden');
             dom.ide.classList.remove('hidden');
             dom.toolbar.classList.remove('hidden');
+            
+            // Header Switch
+            dom.homeTitleArea.classList.add('hidden');
+            dom.headerTitleArea.classList.remove('hidden');
+            dom.projectNameInput.value = currentProject.name;
             
             activeFileIndex = 0;
             renderFileList();
@@ -547,9 +543,14 @@ setTimeout(() => {
 
 
         function createNewProject() {
+            const name = prompt("Enter Project Name:", "My Awesome App");
+            if (!name || name.trim() === "") return;
+
+
             const newP = JSON.parse(JSON.stringify(DEFAULT_PROJECT));
             newP.id = 'proj-' + Date.now();
-            newP.name = "Untitled Project " + (projects.length + 1);
+            newP.name = name;
+            
             projects.unshift(newP);
             saveData();
             openProject(newP.id);
@@ -562,15 +563,24 @@ setTimeout(() => {
             projects.sort((a,b) => b.lastModified - a.lastModified).forEach(p => {
                 const el = document.createElement('div');
                 el.className = 'project-card group';
+                
+                // Thumbnail Logic
+                const thumbnailHtml = p.thumbnail 
+                    ? `<img src="${p.thumbnail}" alt="Preview">` 
+                    : `<div class="text-6xl opacity-20 animate-pulse text-indigo-500 font-mono">&lt;/&gt;</div>`;
+
+
                 el.onclick = () => openProject(p.id);
                 el.innerHTML = `
                     <div class="card-preview">
-                        <div class="text-6xl opacity-20 animate-pulse text-indigo-500 font-mono">&lt;/&gt;</div>
+                        ${thumbnailHtml}
                     </div>
-                    <div class="p-4">
-                        <h3 class="font-bold text-white group-hover:text-indigo-400 transition-colors">${p.name}</h3>
-                        <p class="text-xs text-zinc-500 mt-1">${p.files.length} Files • ${new Date(p.lastModified).toLocaleDateString()}</p>
-                        <div class="mt-4 flex justify-end">
+                    <div class="p-4 flex-1 flex flex-col justify-between">
+                        <div>
+                            <h3 class="font-bold text-white group-hover:text-indigo-400 transition-colors truncate" title="${p.name}">${p.name}</h3>
+                            <p class="text-xs text-zinc-500 mt-1">${p.files.length} Files • ${new Date(p.lastModified).toLocaleDateString()}</p>
+                        </div>
+                        <div class="mt-4 flex justify-between items-center">
                             <button onclick="deleteProject(event, '${p.id}')" class="text-zinc-600 hover:text-red-500 text-xs px-2 py-1 rounded hover:bg-zinc-800 transition-colors">DELETE</button>
                         </div>
                     </div>
@@ -611,8 +621,10 @@ setTimeout(() => {
             dom.editor.value = file.content;
             dom.filename.innerText = file.name;
             dom.strategy.value = file.strategy || (file.name.endsWith('.js') ? 'module' : 'classic');
-            // Show/Hide strategy dropdown based on file type
             dom.strategy.style.display = file.name.endsWith('.js') ? 'block' : 'none';
+            
+            // Reset Scroll
+            dom.editor.scrollTop = 0;
             
             updateHighlight();
         }
@@ -622,14 +634,12 @@ setTimeout(() => {
             const code = dom.editor.value;
             const file = currentProject.files[activeFileIndex];
             file.content = code;
-            saveData();
-
-
+            
             // Syntax Highlight
             const ext = file.name.split('.').pop();
             const lang = ext === 'js' ? 'javascript' : (ext === 'html' ? 'markup' : 'css');
             dom.codeContent.className = `language-${lang}`;
-            dom.codeContent.textContent = code; // Prism escapes html automatically
+            dom.codeContent.textContent = code;
             Prism.highlightElement(dom.codeContent);
 
 
@@ -640,15 +650,96 @@ setTimeout(() => {
 
 
         function syncScroll() {
+            // Sync highlighting layer
             dom.highlighter.scrollTop = dom.editor.scrollTop;
             dom.highlighter.scrollLeft = dom.editor.scrollLeft;
             dom.gutter.scrollTop = dom.editor.scrollTop;
+
+
+            // Show/Hide Scroll Top Button
+            if(dom.editor.scrollTop > 100) {
+                dom.scrollTopBtn.classList.add('visible');
+            } else {
+                dom.scrollTopBtn.classList.remove('visible');
+            }
+        }
+        
+        function scrollToTop() {
+            dom.editor.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+
+        // --- PROJECT MANAGEMENT ---
+        function updateProjectName(newName) {
+            if(newName && newName.trim() !== "") {
+                currentProject.name = newName;
+                saveData();
+            }
+        }
+
+
+        function shareProject() {
+            if(!currentProject) return;
+            
+            // Compress project data
+            const json = JSON.stringify(currentProject);
+            const compressed = LZString.compressToEncodedURIComponent(json);
+            
+            // Generate Link
+            const url = window.location.origin + window.location.pathname + '?data=' + compressed;
+            
+            // Check size estimate (Browser URL limits ~2k-8k chars)
+            if(url.length > 8000) {
+                alert("Project is too large to share via Link. Please use Export instead.");
+                return;
+            }
+
+
+            // Copy to clipboard
+            navigator.clipboard.writeText(url).then(() => {
+                const btn = dom.toolbar.querySelector('button[title="Get Shareable Link"]');
+                const oldHTML = btn.innerHTML;
+                btn.innerHTML = `<span class="text-green-300">COPIED!</span>`;
+                setTimeout(() => btn.innerHTML = oldHTML, 2000);
+            }).catch(() => {
+                prompt("Copy this link:", url);
+            });
+        }
+
+
+        function loadSharedProject() {
+            const params = new URLSearchParams(window.location.search);
+            const data = params.get('data');
+            
+            if(data) {
+                try {
+                    const json = LZString.decompressFromEncodedURIComponent(data);
+                    const sharedProject = JSON.parse(json);
+                    
+                    // Clean ID to avoid conflict or just treat as new
+                    sharedProject.id = 'imported-' + Date.now();
+                    sharedProject.name = sharedProject.name + " (Shared)";
+                    
+                    projects.unshift(sharedProject);
+                    saveData();
+                    
+                    // Clean URL
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    
+                    // Open it
+                    openProject(sharedProject.id);
+                    logToConsole('info', 'Shared project loaded successfully.');
+                } catch(e) {
+                    console.error(e);
+                    alert("Invalid or corrupted share link.");
+                }
+            }
         }
 
 
         // --- COMPILER ENGINE ---
         async function runProject() {
-            dom.console.innerHTML = ''; // Clear console
+            dom.console.innerHTML = '';
             logToConsole('System', 'Bundling files...');
 
 
@@ -656,22 +747,17 @@ setTimeout(() => {
             const files = currentProject.files;
 
 
-            // 1. Create Blob URLs for everything
             files.forEach(f => {
                 const type = f.name.endsWith('.css') ? 'text/css' : (f.name.endsWith('.js') ? 'application/javascript' : 'text/html');
                 urlMap[f.name] = URL.createObjectURL(new Blob([f.content], { type }));
             });
 
 
-            // 2. Resolve Module Imports in JS files
             const resolvedBlobs = {};
             files.forEach(f => {
                 if(f.name.endsWith('.js') && f.strategy === 'module') {
-                    // Regex to find: import ... from "./filename.js"
                     let code = f.content.replace(/(from\s+['"])(\.\/)?(.*?)(['"])/g, (match, p1, p2, filename, p4) => {
-                        if(urlMap[filename]) {
-                            return `${p1}${urlMap[filename]}${p4}`;
-                        }
+                        if(urlMap[filename]) return `${p1}${urlMap[filename]}${p4}`;
                         return match;
                     });
                     resolvedBlobs[f.name] = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }));
@@ -681,12 +767,10 @@ setTimeout(() => {
             });
 
 
-            // 3. Prepare HTML
             const index = files.find(f => f.name === 'index.html') || files[0];
             let html = index.content;
 
 
-            // 4. Inject Console Interceptor
             const consoleScript = `
                 <script>
                     window.onerror = function(msg, url, line) {
@@ -701,16 +785,12 @@ setTimeout(() => {
             `;
 
 
-            // 5. Inject CSS & JS tags dynamically
             let injections = consoleScript;
             files.forEach(f => {
                 if(f.name === 'index.html') return;
-                
                 if(f.name.endsWith('.css')) {
-                    // Inject CSS directly to ensure it loads
                     injections += `<style>${f.content}</style>`;
                 } else if(f.name.endsWith('.js')) {
-                    // Inject Scripts
                     const src = resolvedBlobs[f.name];
                     const isModule = f.strategy === 'module';
                     injections += `<script src="${src}" ${isModule ? 'type="module"' : ''}><\/script>`;
@@ -718,7 +798,6 @@ setTimeout(() => {
             });
 
 
-            // Insert before closing body or at end
             if(html.includes('</body>')) {
                 html = html.replace('</body>', injections + '</body>');
             } else {
@@ -726,13 +805,30 @@ setTimeout(() => {
             }
 
 
-            // 6. Render
             const finalBlob = new Blob([html], {type: 'text/html'});
             dom.previewFrame.src = URL.createObjectURL(finalBlob);
             
-            // Open Preview Pane
             dom.previewPanel.style.width = '45%';
             logToConsole('System', 'Application Started.');
+            
+            saveData();
+            setTimeout(captureThumbnail, 1500);
+        }
+
+
+        // --- THUMBNAIL GENERATOR ---
+        function captureThumbnail() {
+            try {
+                const iframe = dom.previewFrame;
+                if (iframe.contentWindow && iframe.contentWindow.document && iframe.contentWindow.document.body) {
+                    html2canvas(iframe.contentWindow.document.body, {
+                        width: 600, height: 400, scale: 0.5, useCORS: true, logging: false
+                    }).then(canvas => {
+                        currentProject.thumbnail = canvas.toDataURL('image/jpeg', 0.5); 
+                        saveData();
+                    }).catch(e => {});
+                }
+            } catch (e) {}
         }
 
 
@@ -779,8 +875,15 @@ setTimeout(() => {
         }
 
 
+        function triggerUpload() { dom.fileInput.click(); }
+
+
         function saveData() {
-            localStorage.setItem('nebula_ultra_projects', JSON.stringify(projects));
+            try {
+                localStorage.setItem('nebula_ultra_projects', JSON.stringify(projects));
+            } catch(e) {
+                alert("Storage full! Delete some projects to save changes.");
+            }
         }
 
 
@@ -838,19 +941,35 @@ setTimeout(() => {
 
 
         dom.fileInput.addEventListener('change', (e) => {
-            Array.from(e.target.files).forEach(file => {
+            const files = Array.from(e.target.files);
+            let processed = 0;
+            files.forEach(file => {
                 const reader = new FileReader();
                 reader.onload = (ev) => {
+                    let name = file.name;
+                    let counter = 1;
+                    while(currentProject.files.some(f => f.name === name)) {
+                        const parts = file.name.split('.');
+                        const ext = parts.pop();
+                        const base = parts.join('.');
+                        name = `${base}_${counter}.${ext}`;
+                        counter++;
+                    }
                     currentProject.files.push({
-                        name: file.name,
+                        name: name,
                         content: ev.target.result,
-                        strategy: file.name.endsWith('.js') ? 'module' : 'classic'
+                        strategy: name.endsWith('.js') ? 'module' : 'classic'
                     });
-                    renderFileList();
-                    saveData();
+                    processed++;
+                    if(processed === files.length) {
+                        renderFileList();
+                        saveData();
+                        logToConsole('info', `Imported ${files.length} files.`);
+                    }
                 };
-                reader.readAsText(file);
+                if(file.name.match(/\.(html|css|js|txt|json|md)$/i)) reader.readAsText(file);
             });
+            dom.fileInput.value = ''; 
         });
 
 
@@ -872,12 +991,21 @@ setTimeout(() => {
         document.addEventListener('mouseup', () => isResizing = false);
 
 
-        // Init
-        renderProjectGrid();
+        // Init Check
+        window.addEventListener('DOMContentLoaded', () => {
+            if(window.location.search.includes('data=')) {
+                loadSharedProject();
+            } else {
+                renderProjectGrid();
+            }
+        });
     </script>
 </body>
 </html>
 
 
-Ti
+
+
+
+
 
