@@ -2,22 +2,25 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Nebula Studio Ultra</title>
     
+    <!-- PWA Setup (Meta tags, Manifest and SW injected via JS) -->
+    <meta name="theme-color" content="#09090b">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
     <!-- Dependencies -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-css.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Monaco Editor Loader -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.41.0/min/vs/loader.min.js"></script>
 
     <style>
         :root {
@@ -27,7 +30,6 @@
             --accent: #6366f1;
             --text-main: #e4e4e7;
             --text-dim: #a1a1aa;
-            --folder-color: #fbbf24;
         }
 
         body {
@@ -42,10 +44,9 @@
 
         .font-mono { font-family: 'JetBrains Mono', monospace; }
 
-        /* Scrollbars */
-        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: var(--bg-dark); }
-        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 5px; border: 2px solid var(--bg-dark); }
+        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #52525b; }
 
         /* Layout Components */
@@ -99,15 +100,12 @@
             opacity: 0.8;
             transition: opacity 0.3s;
         }
-
         .project-card:hover .card-preview img { opacity: 1; }
 
         /* Editor Layout */
         #ide-container { display: flex; flex: 1; overflow: hidden; height: 100%; }
-        
         .sidebar { width: 300px; background: #101012; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
-        
-        .editor-area { flex: 1; display: flex; flex-direction: column; min-width: 0; background: #0c0c0e; position: relative; }
+        .editor-area { flex: 1; display: flex; flex-direction: column; min-width: 0; background: #1e1e1e; position: relative; }
         
         .preview-area { 
             width: 0%; 
@@ -135,65 +133,15 @@
         .file-tree-item:hover { background: #18181b; color: var(--text-main); }
         .file-tree-item.active { background: #18181b; color: #fff; border-left-color: var(--accent); }
         
-        /* Action buttons in tree */
-        .tree-actions {
-            display: none;
-            margin-left: auto;
-            gap: 4px;
-        }
+        .tree-actions { display: none; margin-left: auto; gap: 4px; }
         .file-tree-item:hover .tree-actions { display: flex; }
-        .action-btn {
-            padding: 2px;
-            border-radius: 3px;
-            color: #71717a;
-        }
+        .action-btn { padding: 2px; border-radius: 3px; color: #71717a; }
         .action-btn:hover { color: #fff; background: #27272a; }
         .action-btn.delete:hover { color: #ef4444; }
 
         /* Code Editor & Asset Viewer */
-        .editor-wrapper { 
-            position: relative; 
-            flex: 1; 
-            overflow: hidden; 
-            display: flex; 
-        }
-        
-        .gutter {
-            width: 48px;
-            background: #101012;
-            color: #52525b;
-            text-align: right;
-            padding: 20px 8px 0 0;
-            font-size: 13px;
-            line-height: 1.5;
-            user-select: none;
-            border-right: 1px solid var(--border);
-            overflow: hidden;
-        }
-
-        #editing-layer, #highlighting-layer {
-            position: absolute; top: 0; left: 0;
-            margin: 0; padding: 20px;
-            width: 100%; height: 100%;
-            font-size: 13px; line-height: 1.5;
-            white-space: pre; word-wrap: normal;
-            border: none; outline: none;
-        }
-
-        #editing-layer {
-            z-index: 2; 
-            color: transparent; 
-            background: transparent;
-            caret-color: var(--accent); 
-            resize: none;
-            overflow: auto; 
-        }
-
-        #highlighting-layer { 
-            z-index: 1; 
-            pointer-events: none; 
-            overflow: hidden; 
-        }
+        .editor-wrapper { position: relative; flex: 1; overflow: hidden; display: flex; }
+        #editor-container { flex: 1; height: 100%; }
 
         #asset-viewer {
             display: none;
@@ -214,33 +162,6 @@
             object-fit: contain;
             border: 1px solid #3f3f46;
             background: url('data:image/svg+xml;utf8,<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10" fill="%2318181b"/><rect x="10" y="10" width="10" height="10" fill="%2318181b"/><rect x="0" y="10" width="10" height="10" fill="%2327272a"/><rect x="10" y="0" width="10" height="10" fill="%2327272a"/></svg>');
-        }
-
-        #scroll-top-btn {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            z-index: 10;
-            background: var(--accent);
-            color: white;
-            border-radius: 50%;
-            width: 36px;
-            height: 36px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-            opacity: 0;
-            transform: translateY(10px);
-            transition: all 0.2s;
-            cursor: pointer;
-            pointer-events: none;
-        }
-
-        #scroll-top-btn.visible {
-            opacity: 1;
-            transform: translateY(0);
-            pointer-events: auto;
         }
 
         /* Console */
@@ -276,36 +197,25 @@
         }
         #resizer:hover { background: var(--accent); }
 
-        /* Editable Project Name */
+        /* Input overrides */
         #project-name-input {
-            background: transparent;
-            border: 1px solid transparent;
-            color: white;
-            font-size: 1.125rem;
-            font-weight: 600;
-            padding: 4px 8px;
-            border-radius: 4px;
-            width: 200px;
-            transition: all 0.2s;
+            background: transparent; border: 1px solid transparent; color: white;
+            font-size: 1.125rem; font-weight: 600; padding: 4px 8px; border-radius: 4px;
+            width: 200px; transition: all 0.2s;
         }
         #project-name-input:hover { border-color: #3f3f46; }
-        #project-name-input:focus { 
-            border-color: var(--accent); 
-            outline: none; 
-            background: #18181b;
-        }
+        #project-name-input:focus { border-color: var(--accent); outline: none; background: #18181b; }
 
-        /* Stats Bar */
-        #stats-bar {
-            height: 24px;
-            background: #09090b;
-            border-top: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            padding: 0 12px;
-            font-size: 10px;
-            color: #52525b;
-            gap: 12px;
+        /* Modals */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.8); backdrop-filter: blur(4px);
+            z-index: 100; display: none; align-items: center; justify-content: center;
+        }
+        .modal-content {
+            background: #18181b; border: 1px solid var(--border);
+            border-radius: 12px; width: 450px; max-width: 90%;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
         }
     </style>
 </head>
@@ -330,15 +240,18 @@
         </div>
 
         <div id="toolbar" class="hidden flex items-center gap-3">
-            <button onclick="shareProject()" class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 rounded-md text-xs font-bold transition-colors shadow-lg shadow-emerald-900/20" title="Get Shareable Link">
+            <button onclick="toggleGitModal()" class="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-md text-xs font-bold transition-colors border border-zinc-700" title="GitHub Sync">
+                <i data-lucide="github" width="14" height="14"></i> SYNC
+            </button>
+            <div class="h-6 w-px bg-white/10 mx-1"></div>
+            <button onclick="shareProject()" class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-md text-xs font-bold transition-colors shadow-lg shadow-emerald-900/20" title="Get Shareable Link">
                 <i data-lucide="share-2" width="14" height="14"></i> SHARE
             </button>
-            <div class="h-6 w-px bg-white/10 mx-2"></div>
-            <button onclick="runProject()" class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded-md text-xs font-bold transition-colors shadow-lg shadow-indigo-500/20">
-                <i data-lucide="play" width="14" height="14"></i> RUN
-            </button>
-            <button onclick="exportProject()" class="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-1.5 rounded-md text-xs font-bold transition-colors border border-zinc-700">
+            <button onclick="exportProject()" class="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-md text-xs font-bold transition-colors border border-zinc-700">
                 <i data-lucide="download" width="14" height="14"></i> EXPORT
+            </button>
+            <button onclick="runProject()" class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-1.5 rounded-md text-xs font-bold transition-colors shadow-lg shadow-indigo-500/20">
+                <i data-lucide="play" width="14" height="14"></i> RUN
             </button>
             <button onclick="togglePreview(true)" class="p-2 text-zinc-400 hover:text-white rounded-md hover:bg-zinc-800 transition-colors" title="Full Screen">
                 <i data-lucide="maximize" width="14" height="14"></i>
@@ -364,7 +277,6 @@
                 </div>
             </div>
 
-            <!-- Search Bar -->
             <div class="relative mb-8">
                 <i data-lucide="search" class="absolute left-4 top-1/2 transform -translate-y-1/2 text-zinc-500" width="18" height="18"></i>
                 <input type="text" id="project-search" placeholder="Search projects..." 
@@ -372,9 +284,7 @@
                        oninput="renderProjectGrid()">
             </div>
 
-            <div id="project-list" class="project-grid">
-                <!-- Cards Injected Here -->
-            </div>
+            <div id="project-list" class="project-grid"></div>
         </div>
     </main>
 
@@ -397,26 +307,19 @@
                         </button>
                     </div>
                 </div>
-                <!-- Extended Input Support -->
                 <input type="file" id="fileInput" multiple accept=".html,.css,.js,.txt,.json,.xml,.md,.png,.jpg,.jpeg,.gif,.svg,.mp3,.wav,.ogg,.glb,.gltf,.obj" class="hidden">
                 <div id="file-list" class="flex-1 overflow-y-auto py-2"></div>
                 
-                <!-- Project Size Indicator -->
                 <div class="p-3 border-t border-[#27272a] bg-[#0c0c0e] text-[11px] text-zinc-500 flex flex-col gap-1">
                     <div class="flex justify-between items-center">
                         <span>Size (MB):</span>
                         <span id="project-size-mb" class="font-mono text-zinc-300">0.00 MB</span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span>Size (Mb):</span>
-                        <span id="project-size-bit" class="font-mono text-zinc-400">0.00 Mb</span>
                     </div>
                 </div>
             </aside>
 
             <!-- Editor / Viewer -->
             <section class="editor-area">
-                <!-- File Tabs / Header -->
                 <div class="h-10 bg-[#141417] border-b border-[#27272a] flex items-center justify-between px-4 shrink-0">
                     <div class="flex items-center gap-2 text-xs">
                         <span class="text-zinc-500">Editing:</span>
@@ -429,23 +332,12 @@
                 </div>
 
                 <div class="editor-wrapper">
-                    <!-- Text Editor Components -->
-                    <div id="gutter" class="gutter font-mono"></div>
-                    <div id="editor-container" class="relative flex-1">
-                        <textarea id="editing-layer" class="font-mono" spellcheck="false"></textarea>
-                        <pre id="highlighting-layer" class="font-mono"><code id="code-content"></code></pre>
-                        
-                        <!-- Scroll Top Button -->
-                        <div id="scroll-top-btn" onclick="scrollToTop()">
-                            <i data-lucide="arrow-up" width="16" height="16"></i>
-                        </div>
-                    </div>
+                    <!-- Monaco Editor Target -->
+                    <div id="editor-container"></div>
 
                     <!-- Asset Viewer Component -->
                     <div id="asset-viewer">
-                        <div id="asset-preview-container" class="flex flex-col items-center gap-4">
-                            <!-- Injected by JS -->
-                        </div>
+                        <div id="asset-preview-container" class="flex flex-col items-center gap-4"></div>
                         <p class="mt-6 text-sm text-zinc-500 max-w-xs">
                             <span class="font-bold text-zinc-400">Path:</span> 
                             <code id="asset-usage-code" class="bg-black px-1 py-0.5 rounded text-indigo-400 select-all"></code>
@@ -477,124 +369,131 @@
                         <i data-lucide="x" width="14" height="14"></i>
                     </button>
                 </div>
-                <!-- Wrapper for capturing -->
                 <div id="preview-wrapper" class="w-full h-full relative overflow-hidden">
-                    <iframe id="preview-frame" class="w-full h-full border-none block"></iframe>
+                    <iframe id="preview-frame" class="w-full h-full border-none block" sandbox="allow-scripts allow-same-origin allow-modals"></iframe>
                 </div>
             </section>
         </div>
-        <!-- Status Bar -->
-        <div id="stats-bar">
-            <span>Nebula Engine v2.2</span>
+        
+        <div class="h-6 bg-[#09090b] border-t border-[#27272a] flex items-center px-3 font-mono text-[10px] text-[#52525b] gap-4">
+            <span>Nebula Engine v3.0</span>
             <span class="flex-1"></span>
             <span id="status-msg">Ready</span>
         </div>
     </main>
 
+    <!-- Git Modal -->
+    <div id="git-modal" class="modal-overlay">
+        <div class="modal-content p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold text-white flex items-center gap-2"><i data-lucide="github"></i> GitHub Sync</h2>
+                <button onclick="toggleGitModal()" class="text-zinc-400 hover:text-white"><i data-lucide="x" width="18" height="18"></i></button>
+            </div>
+            
+            <div class="space-y-4 text-sm">
+                <div>
+                    <label class="block text-zinc-400 mb-1">Personal Access Token (PAT) <span class="text-xs text-zinc-600">(needs repo scope)</span></label>
+                    <input type="password" id="git-pat" class="w-full bg-[#0c0c0e] border border-[#27272a] rounded px-3 py-2 text-white outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-zinc-400 mb-1">Repository (e.g. username/repo)</label>
+                    <input type="text" id="git-repo" class="w-full bg-[#0c0c0e] border border-[#27272a] rounded px-3 py-2 text-white outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-zinc-400 mb-1">Branch</label>
+                    <input type="text" id="git-branch" value="main" class="w-full bg-[#0c0c0e] border border-[#27272a] rounded px-3 py-2 text-white outline-none focus:border-indigo-500">
+                </div>
+                
+                <div class="flex gap-3 pt-4 border-t border-[#27272a]">
+                    <button onclick="gitPull()" class="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white py-2 rounded font-bold transition-colors">
+                        Pull (Clone / Overwrite)
+                    </button>
+                </div>
+                
+                <div class="pt-4 border-t border-[#27272a]">
+                    <label class="block text-zinc-400 mb-1">Commit Message</label>
+                    <input type="text" id="git-msg" placeholder="Update from Nebula Studio" class="w-full bg-[#0c0c0e] border border-[#27272a] rounded px-3 py-2 text-white outline-none focus:border-indigo-500 mb-3">
+                    <button onclick="gitPush()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-2 rounded font-bold transition-colors">
+                        Commit & Push
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Logic -->
     <script>
-        // --- CONSTANTS ---
+        // --- PWA INJECTION ---
+        (function setupPWA() {
+            const manifestData = {
+                name: "Nebula Studio Ultra",
+                short_name: "Nebula",
+                start_url: ".",
+                display: "standalone",
+                background_color: "#09090b",
+                theme_color: "#6366f1",
+                icons: [{
+                    src: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='192' height='192' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%234f46e5'/><text x='50%' y='50%' font-family='sans-serif' font-size='60' fill='white' text-anchor='middle' dy='.3em'>N</text></svg>",
+                    sizes: "192x192",
+                    type: "image/svg+xml"
+                }]
+            };
+            const manifestUrl = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifestData));
+            document.head.insertAdjacentHTML('beforeend', `<link rel="manifest" href="${manifestUrl}">`);
+            
+            // Dummy Service Worker to satisfy PWA requirements
+            const swCode = `self.addEventListener('install', e => self.skipWaiting()); self.addEventListener('activate', e => self.clients.claim()); self.addEventListener('fetch', e => {});`;
+            const swBlob = new Blob([swCode], {type: 'application/javascript'});
+            const swUrl = URL.createObjectURL(swBlob);
+            if ('serviceWorker' in navigator) navigator.serviceWorker.register(swUrl).catch(()=>{});
+        })();
+
+        // --- CONSTANTS & SETUP ---
         const DEFAULT_PROJECT = {
-            id: null,
-            name: "Welcome Project",
-            thumbnail: null,
-            lastModified: Date.now(),
+            id: null, name: "Welcome Project", thumbnail: null, lastModified: Date.now(),
             files: [
                 {
-                    name: "index.html",
-                    type: "file",
-                    isBinary: false,
-                    content: `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Nebula Welcome</title>
-    <link rel="stylesheet" href="css/style.css">
-</head>
-<body>
-    <div class="container">
-        <h1>Welcome to Nebula</h1>
-        <p>A virtual IDE for the web.</p>
-        <div id="output">Initializing...</div>
-    </div>
-    <script type="module" src="js/app.js"><\/script>
-</body>
-</html>`
+                    name: "index.html", type: "file", isBinary: false,
+                    content: `<!DOCTYPE html>\n<html lang="en">\n<head>\n    <meta charset="UTF-8">\n    <title>Nebula Welcome</title>\n    <link rel="stylesheet" href="css/style.css">\n</head>\n<body>\n    <div class="container">\n        <h1>Welcome to Nebula</h1>\n        <p>A virtual IDE for the web.</p>\n        <div id="output">Initializing...</div>\n    </div>\n    <script type="module" src="js/app.js"><\/script>\n</body>\n</html>`
                 },
                 { name: "css", type: "folder" },
                 {
-                    name: "css/style.css",
-                    type: "file",
-                    isBinary: false,
-                    content: `body {
-    background: #0f172a;
-    color: white;
-    font-family: system-ui, sans-serif;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    margin: 0;
-}
-.container {
-    text-align: center;
-    background: #1e293b;
-    padding: 3rem;
-    border-radius: 1rem;
-    border: 1px solid #334155;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
-}
-h1 { color: #818cf8; margin-bottom: 0.5rem; }
-#output { 
-    margin-top: 2rem; 
-    font-family: monospace; 
-    color: #4ade80; 
-}`
+                    name: "css/style.css", type: "file", isBinary: false,
+                    content: `body {\n    background: #0f172a;\n    color: white;\n    font-family: system-ui, sans-serif;\n    display: flex;\n    justify-content: center;\n    align-items: center;\n    height: 100vh;\n    margin: 0;\n}\n.container {\n    text-align: center;\n    background: #1e293b;\n    padding: 3rem;\n    border-radius: 1rem;\n    border: 1px solid #334155;\n    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);\n}\nh1 { color: #818cf8; margin-bottom: 0.5rem; }\n#output { \n    margin-top: 2rem; \n    font-family: monospace; \n    color: #4ade80; \n}`
                 },
                 { name: "js", type: "folder" },
                 {
-                    name: "js/utils.js",
-                    type: "file",
-                    isBinary: false,
-                    strategy: "module",
-                    content: `export function greet() {
-    return "System Online. Ready for coding.";
-}`
+                    name: "js/utils.js", type: "file", isBinary: false, strategy: "module",
+                    content: `export function greet() {\n    return "System Online. Ready for coding.";\n}`
                 },
                 {
-                    name: "js/app.js",
-                    type: "file",
-                    isBinary: false,
-                    strategy: "module",
-                    content: `import { greet } from "./utils.js";
-const el = document.getElementById("output");
-el.innerText = greet();`
+                    name: "js/app.js", type: "file", isBinary: false, strategy: "module",
+                    content: `import { greet } from "./utils.js";\nconst el = document.getElementById("output");\nel.innerText = greet();\n\n// Intentional Error to demo error mapping:\n// console.log(nonExistentVariable);`
                 }
             ]
         };
 
-        // --- STATE MANAGEMENT ---
         let projects = JSON.parse(localStorage.getItem('nebula_ultra_projects')) || [];
         if(projects.length === 0) {
-            // Ensure at least default exists on fresh load
             const welcome = JSON.parse(JSON.stringify(DEFAULT_PROJECT));
             welcome.id = 'proj-welcome';
             projects.push(welcome);
             localStorage.setItem('nebula_ultra_projects', JSON.stringify(projects));
         }
 
-        let expandedFolders = new Set(['css', 'js']); // Default expanded
+        let expandedFolders = new Set(['css', 'js']); 
+        let currentProject = null;
+        let activeFileName = "index.html"; 
         
+        let monacoEditorInstance = null;
+        let isSettingValue = false; // Prevent circular triggers
+
         // --- DOM ELEMENTS ---
         const dom = {
             home: document.getElementById('view-home'),
             ide: document.getElementById('view-ide'),
             projectList: document.getElementById('project-list'),
             fileList: document.getElementById('file-list'),
-            editor: document.getElementById('editing-layer'),
-            highlighter: document.getElementById('highlighting-layer'),
-            codeContent: document.getElementById('code-content'),
-            gutter: document.getElementById('gutter'),
             editorContainer: document.getElementById('editor-container'),
             assetViewer: document.getElementById('asset-viewer'),
             assetPreview: document.getElementById('asset-preview-container'),
@@ -610,17 +509,43 @@ el.innerText = greet();`
             projectNameInput: document.getElementById('project-name-input'),
             headerTitleArea: document.getElementById('header-title-area'),
             homeTitleArea: document.getElementById('home-title-area'),
-            scrollTopBtn: document.getElementById('scroll-top-btn'),
             projectSizeMB: document.getElementById('project-size-mb'),
-            projectSizeBit: document.getElementById('project-size-bit'),
             statusMsg: document.getElementById('status-msg'),
-            projectSearch: document.getElementById('project-search')
+            projectSearch: document.getElementById('project-search'),
+            gitModal: document.getElementById('git-modal')
         };
 
-        let currentProject = null;
-        let activeFileName = "index.html"; 
+        // --- INIT MONACO ---
+        require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.41.0/min/vs' }});
+        require(['vs/editor/editor.main'], function() {
+            monacoEditorInstance = monaco.editor.create(dom.editorContainer, {
+                value: '',
+                language: 'html',
+                theme: 'vs-dark',
+                automaticLayout: true,
+                minimap: { enabled: true, scale: 0.75 },
+                fontSize: 13,
+                fontFamily: "'JetBrains Mono', monospace",
+                scrollBeyondLastLine: false,
+                roundedSelection: false,
+                padding: { top: 16 }
+            });
 
-        // --- HELPER: FILE TYPES & PATHS ---
+            monacoEditorInstance.onDidChangeModelContent(() => {
+                if(isSettingValue || !currentProject) return;
+                const file = currentProject.files.find(f => f.name === activeFileName);
+                if(file) {
+                    file.content = monacoEditorInstance.getValue();
+                }
+            });
+
+            // Keyboard shortcut hook
+            monacoEditorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function() {
+                runProject();
+            });
+        });
+
+        // --- HELPER FUNCTIONS ---
         function getFileType(name) {
             const ext = name.split('.').pop().toLowerCase();
             if(['png','jpg','jpeg','gif','svg','webp'].includes(ext)) return 'image';
@@ -634,16 +559,12 @@ el.innerText = greet();`
             const parts = relativePath.split('/');
             for (let part of parts) {
                 if (part === '.' || part === '') continue;
-                if (part === '..') {
-                    if (stack.length > 0) stack.pop();
-                } else {
-                    stack.push(part);
-                }
+                if (part === '..') { if (stack.length > 0) stack.pop(); } 
+                else { stack.push(part); }
             }
             return stack.join('/');
         }
 
-        // --- CALC SIZE ---
         function updateProjectStats() {
             if(!currentProject) return;
             let totalBytes = 0;
@@ -656,19 +577,23 @@ el.innerText = greet();`
                     totalBytes += new Blob([f.content]).size;
                 }
             });
-            const mb = (totalBytes / (1024 * 1024)).toFixed(2);
-            const bits = ((totalBytes * 8) / (1024 * 1024)).toFixed(2);
-            dom.projectSizeMB.innerText = `${mb} MB`;
-            dom.projectSizeBit.innerText = `${bits} Mb`;
+            dom.projectSizeMB.innerText = `${(totalBytes / (1024 * 1024)).toFixed(2)} MB`;
+        }
+
+        function setStatus(msg, timeout=0) {
+            dom.statusMsg.innerText = msg;
+            if(timeout > 0) setTimeout(() => dom.statusMsg.innerText = 'Ready', timeout);
         }
 
         // --- NAVIGATION ---
         function showHome() {
+            if(currentProject) saveData();
             dom.ide.classList.add('hidden');
             dom.home.classList.remove('hidden');
             dom.toolbar.classList.add('hidden');
             dom.headerTitleArea.classList.add('hidden');
             dom.homeTitleArea.classList.remove('hidden');
+            currentProject = null;
             renderProjectGrid();
         }
 
@@ -676,11 +601,7 @@ el.innerText = greet();`
             currentProject = loadedProject || projects.find(p => p.id === id);
             if(!currentProject) return;
 
-            // Migration
-            currentProject.files.forEach(f => {
-                if(!f.type) f.type = 'file';
-            });
-
+            currentProject.files.forEach(f => { if(!f.type) f.type = 'file'; });
             currentProject.lastModified = Date.now();
             saveData();
             
@@ -692,25 +613,24 @@ el.innerText = greet();`
             dom.projectNameInput.value = currentProject.name;
             
             const index = currentProject.files.find(f => f.name === 'index.html');
-            activeFileName = index ? index.name : currentProject.files[0].name;
+            activeFileName = index ? index.name : currentProject.files.find(f=>f.type==='file')?.name;
             
             renderFileList();
-            loadEditor();
+            setTimeout(loadEditor, 100); // Give Monaco time if loading fast
             updateProjectStats();
             lucide.createIcons();
+            
+            // Auto populate Git UI if used previously
+            dom.gitPat.value = localStorage.getItem('nebula_git_pat') || '';
+            dom.gitRepo.value = currentProject.gitRepo || '';
         }
 
         function createNewProject() {
             const name = prompt("Enter Project Name:", "My App");
             if (!name || name.trim() === "") return;
-
             const newP = JSON.parse(JSON.stringify(DEFAULT_PROJECT));
             newP.id = 'proj-' + Date.now();
             newP.name = name;
-            
-            // Clean out the default content if user wants empty, but let's keep it structured for now
-            // Just unique-ify files if needed, but since it's a new project object, it's fine.
-            
             projects.unshift(newP);
             saveData();
             openProject(newP.id);
@@ -729,7 +649,6 @@ el.innerText = greet();`
         function renderProjectGrid() {
             dom.projectList.innerHTML = '';
             const term = dom.projectSearch.value.toLowerCase();
-            
             const filtered = projects.filter(p => p.name.toLowerCase().includes(term));
             
             if(filtered.length === 0) {
@@ -740,16 +659,10 @@ el.innerText = greet();`
             filtered.sort((a,b) => b.lastModified - a.lastModified).forEach(p => {
                 const el = document.createElement('div');
                 el.className = 'project-card group';
-                
-                const thumbnailHtml = p.thumbnail 
-                    ? `<img src="${p.thumbnail}" alt="Preview">` 
-                    : `<div class="text-6xl opacity-20 animate-pulse text-indigo-500 font-mono">&lt;/&gt;</div>`;
-
+                const thumbnailHtml = p.thumbnail ? `<img src="${p.thumbnail}" alt="Preview">` : `<div class="text-6xl opacity-20 animate-pulse text-indigo-500 font-mono">&lt;/&gt;</div>`;
                 el.onclick = () => openProject(p.id);
                 el.innerHTML = `
-                    <div class="card-preview">
-                        ${thumbnailHtml}
-                    </div>
+                    <div class="card-preview">${thumbnailHtml}</div>
                     <div class="p-4 flex-1 flex flex-col justify-between">
                         <div>
                             <h3 class="font-bold text-white group-hover:text-indigo-400 transition-colors truncate" title="${p.name}">${p.name}</h3>
@@ -765,10 +678,8 @@ el.innerText = greet();`
             lucide.createIcons();
         }
 
-        // --- TREE VIEW RENDERER ---
         function renderFileList() {
             dom.fileList.innerHTML = '';
-            
             const tree = { name: "root", children: {}, files: [] };
             
             currentProject.files.forEach(file => {
@@ -776,16 +687,12 @@ el.innerText = greet();`
                 let current = tree;
                 for(let i=0; i < parts.length - 1; i++) {
                     const part = parts[i];
-                    if(!current.children[part]) {
-                        current.children[part] = { name: part, path: parts.slice(0,i+1).join('/'), children: {}, files: [] };
-                    }
+                    if(!current.children[part]) current.children[part] = { name: part, path: parts.slice(0,i+1).join('/'), children: {}, files: [] };
                     current = current.children[part];
                 }
                 const fileName = parts[parts.length - 1];
                 if(file.type === 'folder') {
-                   if(!current.children[fileName]) {
-                       current.children[fileName] = { name: fileName, path: file.name, children: {}, files: [] };
-                   }
+                   if(!current.children[fileName]) current.children[fileName] = { name: fileName, path: file.name, children: {}, files: [] };
                 } else {
                     current.files.push({ ...file, shortName: fileName });
                 }
@@ -799,57 +706,43 @@ el.innerText = greet();`
                 folders.forEach(folder => {
                     const isExpanded = expandedFolders.has(folder.path);
                     const folderEl = document.createElement('div');
-                    folderEl.className = 'file-tree-item';
+                    folderEl.className = 'file-tree-item group';
                     folderEl.style.paddingLeft = (depth * 12 + 8) + 'px';
                     folderEl.innerHTML = `
-                        <div class="flex items-center flex-1 overflow-hidden">
+                        <div class="flex items-center flex-1 overflow-hidden" onclick="toggleFolder(event, '${folder.path}')">
                             <i data-lucide="${isExpanded ? 'folder-open' : 'folder'}" width="14" height="14" class="mr-2 text-amber-400 shrink-0"></i>
                             <span class="truncate">${folder.name}</span>
                         </div>
                         <div class="tree-actions">
                              <button onclick="triggerRename(event, '${folder.path}')" class="action-btn" title="Rename"><i data-lucide="pencil" width="12" height="12"></i></button>
+                             <button onclick="deleteNode(event, '${folder.path}', true)" class="action-btn delete" title="Delete Folder"><i data-lucide="trash-2" width="12" height="12"></i></button>
                         </div>
                     `;
-                    folderEl.onclick = (e) => {
-                        e.stopPropagation();
-                        if(isExpanded) expandedFolders.delete(folder.path);
-                        else expandedFolders.add(folder.path);
-                        renderFileList();
-                    };
                     container.appendChild(folderEl);
                     if(isExpanded) container.appendChild(renderNode(folder, depth + 1));
                 });
 
                 files.forEach(file => {
                     const type = getFileType(file.name);
-                    let icon = 'file';
-                    let color = 'text-zinc-500';
-                    
+                    let icon = 'file'; let color = 'text-zinc-500';
                     if(file.name.endsWith('.html')) { icon='file-code'; color='text-orange-500'; }
                     else if(file.name.endsWith('.css')) { icon='palette'; color='text-blue-400'; }
                     else if(file.name.endsWith('.js')) { icon='file-code-2'; color='text-yellow-400'; }
                     else if(type === 'image') { icon='image'; color='text-pink-400'; }
-                    else if(type === 'audio') { icon='music'; color='text-green-400'; }
-                    else if(type === 'model') { icon='box'; color='text-orange-400'; }
-
+                    
                     const fileEl = document.createElement('div');
                     fileEl.className = `file-tree-item ${file.name === activeFileName ? 'active' : ''} group`;
                     fileEl.style.paddingLeft = (depth * 12 + 8) + 'px';
                     fileEl.innerHTML = `
-                        <div class="flex items-center flex-1 overflow-hidden">
+                        <div class="flex items-center flex-1 overflow-hidden" onclick="openFile('${file.name}')">
                             <i data-lucide="${icon}" width="14" height="14" class="mr-2 ${color} shrink-0"></i>
                             <span class="truncate">${file.shortName}</span>
                         </div>
                         <div class="tree-actions">
                             <button onclick="triggerRename(event, '${file.name}')" class="action-btn" title="Rename"><i data-lucide="pencil" width="12" height="12"></i></button>
-                            <button onclick="deleteFile(event, '${file.name}')" class="action-btn delete" title="Delete"><i data-lucide="trash-2" width="12" height="12"></i></button>
+                            <button onclick="deleteNode(event, '${file.name}', false)" class="action-btn delete" title="Delete"><i data-lucide="trash-2" width="12" height="12"></i></button>
                         </div>
                     `;
-                    fileEl.onclick = () => {
-                        activeFileName = file.name;
-                        renderFileList();
-                        loadEditor();
-                    };
                     container.appendChild(fileEl);
                 });
                 return container;
@@ -858,8 +751,22 @@ el.innerText = greet();`
             lucide.createIcons();
         }
 
-        // --- EDITOR & VIEWER LOGIC ---
+        window.toggleFolder = (e, path) => {
+            e.stopPropagation();
+            if(expandedFolders.has(path)) expandedFolders.delete(path);
+            else expandedFolders.add(path);
+            renderFileList();
+        };
+
+        window.openFile = (name) => {
+            activeFileName = name;
+            renderFileList();
+            loadEditor();
+        };
+
+        // --- EDITOR LOGIC ---
         function loadEditor() {
+            if(!currentProject || !monacoEditorInstance) return;
             const file = currentProject.files.find(f => f.name === activeFileName);
             if(!file) return;
 
@@ -867,20 +774,24 @@ el.innerText = greet();`
             
             if(file.isBinary) {
                 dom.editorContainer.classList.add('hidden');
-                dom.gutter.classList.add('hidden');
                 dom.assetViewer.style.display = 'flex';
                 dom.strategy.style.display = 'none';
                 renderAssetPreview(file);
             } else {
                 dom.editorContainer.classList.remove('hidden');
-                dom.gutter.classList.remove('hidden');
                 dom.assetViewer.style.display = 'none';
                 dom.strategy.style.display = file.name.endsWith('.js') ? 'block' : 'none';
                 dom.strategy.value = file.strategy || 'classic';
                 
-                dom.editor.value = file.content;
-                dom.editor.scrollTop = 0;
-                updateHighlight();
+                isSettingValue = true;
+                monacoEditorInstance.setValue(file.content || "");
+                
+                // Set language
+                const ext = file.name.split('.').pop();
+                const langMap = { 'js': 'javascript', 'html': 'html', 'css': 'css', 'json': 'json', 'md': 'markdown' };
+                monaco.editor.setModelLanguage(monacoEditorInstance.getModel(), langMap[ext] || 'plaintext');
+                
+                isSettingValue = false;
             }
         }
 
@@ -893,69 +804,9 @@ el.innerText = greet();`
                 dom.assetPreview.innerHTML = `<img src="${file.content}" class="asset-preview-image shadow-2xl">`;
             } else if (type === 'audio') {
                 dom.assetPreview.innerHTML = `<div class="text-6xl mb-4">🎵</div><audio controls src="${file.content}" class="w-64"></audio>`;
-            } else if (type === 'model') {
-                dom.assetPreview.innerHTML = `<div class="text-6xl mb-4 text-orange-500">📦</div><div class="text-lg font-bold">3D Model File</div><div class="text-xs text-zinc-500">${(file.content.length/1024).toFixed(1)} KB (Base64)</div>`;
+            } else {
+                dom.assetPreview.innerHTML = `<div class="text-6xl mb-4 text-orange-500">📦</div><div class="text-lg font-bold">Binary File</div>`;
             }
-        }
-
-        function updateHighlight() {
-            const file = currentProject.files.find(f => f.name === activeFileName);
-            if(!file || file.isBinary) return;
-
-            const code = dom.editor.value;
-            file.content = code;
-            
-            const ext = file.name.split('.').pop();
-            const lang = ext === 'js' ? 'javascript' : (ext === 'html' ? 'markup' : 'css');
-            dom.codeContent.className = `language-${lang}`;
-            dom.codeContent.textContent = code;
-            Prism.highlightElement(dom.codeContent);
-
-            const lines = code.split('\n').length;
-            dom.gutter.innerHTML = Array.from({length: lines}, (_, i) => i + 1).join('<br>');
-        }
-
-        function syncScroll() {
-            dom.highlighter.scrollTop = dom.editor.scrollTop;
-            dom.highlighter.scrollLeft = dom.editor.scrollLeft;
-            dom.gutter.scrollTop = dom.editor.scrollTop;
-            
-            if(dom.editor.scrollTop > 100) dom.scrollTopBtn.classList.add('visible');
-            else dom.scrollTopBtn.classList.remove('visible');
-        }
-        
-        function scrollToTop() {
-            dom.editor.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-
-        // --- EXPORT LOGIC ---
-        function exportProject() {
-            const zip = new JSZip();
-            
-            currentProject.files.forEach(f => {
-                if(f.type === 'folder') {
-                    zip.folder(f.name); 
-                    return;
-                }
-                
-                if(f.isBinary) {
-                    const parts = f.content.split(',');
-                    const base64Data = parts[1];
-                    zip.file(f.name, base64Data, {base64: true});
-                } else {
-                    zip.file(f.name, f.content);
-                }
-            });
-            
-            zip.generateAsync({type:"blob"}).then(function(content) {
-                const a = document.createElement("a");
-                a.href = URL.createObjectURL(content);
-                a.download = currentProject.name.replace(/\s+/g, '_') + ".zip";
-                a.click();
-                
-                dom.statusMsg.innerText = "Export Complete!";
-                setTimeout(() => dom.statusMsg.innerText = "Ready", 3000);
-            });
         }
 
         // --- COMPILER ENGINE ---
@@ -977,7 +828,9 @@ el.innerText = greet();`
                     blobUrl = URL.createObjectURL(new Blob([ab], { type: mime }));
                 } else {
                     const type = f.name.endsWith('.css') ? 'text/css' : (f.name.endsWith('.js') ? 'application/javascript' : 'text/html');
-                    blobUrl = URL.createObjectURL(new Blob([f.content], { type }));
+                    // Add sourceURL for error tracking in JS
+                    const codeWithSource = f.name.endsWith('.js') ? f.content + `\n//# sourceURL=nebula://${f.name}` : f.content;
+                    blobUrl = URL.createObjectURL(new Blob([codeWithSource], { type }));
                 }
                 urlMap[f.name] = blobUrl;
             });
@@ -987,14 +840,12 @@ el.innerText = greet();`
                 if(!f.isBinary && f.name.endsWith('.js') && f.strategy === 'module') {
                     let code = f.content.replace(/(import\s+.*?from\s+['"])(.*?)(['"])|(import\s+['"])(.*?)(['"])/g, (match, p1, p2, p3, p4, p5, p6) => {
                         const importPath = p2 || p5;
-                        const prefix = p1 || p4;
-                        const suffix = p3 || p6;
                         const absolutePath = resolvePath(f.name, importPath);
-                        if(urlMap[absolutePath]) return `${prefix}${urlMap[absolutePath]}${suffix}`;
-                        
-                        logToConsole('error', `Import Error in ${f.name}: Cannot find "${importPath}" (resolved as "${absolutePath}")`);
+                        if(urlMap[absolutePath]) return `${p1 || p4}${urlMap[absolutePath]}${p3 || p6}`;
+                        logToConsole('error', `Import Error in ${f.name}: Cannot find "${importPath}"`);
                         return match; 
                     });
+                    code += `\n//# sourceURL=nebula://${f.name}`;
                     resolvedBlobs[f.name] = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }));
                 } else {
                     resolvedBlobs[f.name] = urlMap[f.name];
@@ -1002,21 +853,25 @@ el.innerText = greet();`
             });
 
             const index = files.find(f => f.name === 'index.html') || files[0];
+            if(!index) return;
+            
             let html = index.content;
             
             html = html.replace(/(src|href)=["'](.*?)["']/g, (match, attr, path) => {
                 if(path.startsWith('http') || path.startsWith('//')) return match;
                 const absolutePath = resolvePath('index.html', path); 
                 if(urlMap[absolutePath]) return `${attr}="${urlMap[absolutePath]}"`;
-                
-                logToConsole('warn', `HTML Resource Warning: Cannot find "${path}" (resolved as "${absolutePath}")`);
+                logToConsole('warn', `HTML Resource Warning: Cannot find "${path}"`);
                 return match;
             });
 
             const consoleScript = `
                 <script>
-                    window.onerror = function(msg, url, line) {
-                        window.parent.postMessage({type: 'error', msg: msg, line: line}, '*');
+                    window.onerror = function(msg, url, line, col, error) {
+                        let file = url || 'Unknown';
+                        if(file.includes('nebula://')) file = file.split('nebula://')[1];
+                        else file = 'index.html or inline';
+                        window.parent.postMessage({type: 'error', msg: msg, file: file, line: line}, '*');
                     };
                     const oldLog = console.log;
                     console.log = function(...args) {
@@ -1035,23 +890,17 @@ el.innerText = greet();`
                         if(path.startsWith('http') || path.startsWith('data:')) return match;
                         const absolutePath = resolvePath(f.name, path);
                         if(urlMap[absolutePath]) return `url('${urlMap[absolutePath]}')`;
-                        
-                        logToConsole('warn', `CSS Resource Warning: Cannot find "${path}"`);
                         return match;
                     });
                     injections += `<style>${cssContent}</style>`;
                 } else if(f.name.endsWith('.js')) {
                     const src = resolvedBlobs[f.name];
-                    const isModule = f.strategy === 'module';
-                    injections += `<script src="${src}" ${isModule ? 'type="module"' : ''}><\/script>`;
+                    injections += `<script src="${src}" ${f.strategy === 'module' ? 'type="module"' : ''}><\/script>`;
                 }
             });
 
-            if(html.includes('</body>')) {
-                html = html.replace('</body>', injections + '</body>');
-            } else {
-                html += injections;
-            }
+            if(html.includes('</body>')) html = html.replace('</body>', injections + '</body>');
+            else html += injections;
 
             const finalBlob = new Blob([html], {type: 'text/html'});
             dom.previewFrame.src = URL.createObjectURL(finalBlob);
@@ -1069,20 +918,14 @@ el.innerText = greet();`
             if (!newName || newName === oldName) return;
             if (currentProject.files.some(f => f.name === newName)) return alert("Name already exists!");
 
-            // Check if renaming folder
             const isFolder = currentProject.files.find(f => f.name === oldName)?.type === 'folder';
 
             if (isFolder) {
                 currentProject.files.forEach(f => {
                     if (f.name === oldName) f.name = newName;
-                    else if (f.name.startsWith(oldName + '/')) {
-                        f.name = f.name.replace(oldName, newName);
-                    }
+                    else if (f.name.startsWith(oldName + '/')) f.name = f.name.replace(oldName, newName);
                 });
-                if(expandedFolders.has(oldName)) {
-                    expandedFolders.delete(oldName);
-                    expandedFolders.add(newName);
-                }
+                if(expandedFolders.has(oldName)) { expandedFolders.delete(oldName); expandedFolders.add(newName); }
             } else {
                 const target = currentProject.files.find(f => f.name === oldName);
                 if(target) target.name = newName;
@@ -1091,82 +934,65 @@ el.innerText = greet();`
             if (activeFileName === oldName) activeFileName = newName;
             else if (activeFileName.startsWith(oldName + '/')) activeFileName = activeFileName.replace(oldName, newName);
 
-            saveData();
-            renderFileList();
-            loadEditor();
+            saveData(); renderFileList(); loadEditor();
         }
 
         function addNewFile() {
-            const path = prompt("Enter file path (e.g., src/components/button.js):", "new.js");
+            const path = prompt("Enter file path (e.g., src/utils.js):", "new.js");
             if(path) {
                 if(currentProject.files.some(f => f.name === path)) return alert("File exists!");
-                currentProject.files.push({ 
-                    name: path, 
-                    type: 'file', 
-                    content: '', 
-                    isBinary: false, 
-                    strategy: path.endsWith('.js') ? 'module' : 'classic' 
-                });
-                
+                currentProject.files.push({ name: path, type: 'file', content: '', isBinary: false, strategy: path.endsWith('.js') ? 'module' : 'classic' });
                 const parts = path.split('/');
                 if(parts.length > 1) expandedFolders.add(parts.slice(0, -1).join('/'));
-
-                saveData();
-                renderFileList();
-                activeFileName = path;
-                loadEditor();
-                updateProjectStats();
+                saveData(); renderFileList();
+                activeFileName = path; loadEditor(); updateProjectStats();
             }
         }
 
         function triggerNewFolder() {
             const path = prompt("Enter folder path (e.g., assets/models):");
-            if(path) {
-                if(!currentProject.files.some(f => f.name === path)) {
-                    currentProject.files.push({ name: path, type: 'folder' });
-                    expandedFolders.add(path);
-                    saveData();
-                    renderFileList();
-                }
+            if(path && !currentProject.files.some(f => f.name === path)) {
+                currentProject.files.push({ name: path, type: 'folder' });
+                expandedFolders.add(path);
+                saveData(); renderFileList();
             }
         }
 
-        function deleteFile(e, name) {
+        function deleteNode(e, path, isFolder) {
             e.stopPropagation();
-            if(!confirm(`Delete ${name}?`)) return;
-            currentProject.files = currentProject.files.filter(f => f.name !== name && !f.name.startsWith(name + '/'));
-            if(activeFileName === name || activeFileName.startsWith(name + '/')) {
+            if(!confirm(`Delete ${isFolder ? 'folder and all contents' : 'file'} "${path}"?`)) return;
+            
+            if(isFolder) {
+                currentProject.files = currentProject.files.filter(f => f.name !== path && !f.name.startsWith(path + '/'));
+            } else {
+                currentProject.files = currentProject.files.filter(f => f.name !== path);
+            }
+
+            if(activeFileName === path || activeFileName.startsWith(path + '/')) {
                 activeFileName = currentProject.files.find(f => f.type === 'file')?.name || '';
             }
-            saveData();
-            renderFileList();
-            loadEditor();
-            updateProjectStats();
+            saveData(); renderFileList(); loadEditor(); updateProjectStats();
         }
 
         function deleteProject(e, id) {
             e.stopPropagation();
             if(!confirm("Delete project?")) return;
             projects = projects.filter(p => p.id !== id);
-            saveData();
-            renderProjectGrid();
+            saveData(); renderProjectGrid();
         }
 
         function triggerUpload() { dom.fileInput.click(); }
 
-        // --- UTILS ---
+        // --- EXPORT / SHARE ---
         function updateProjectName(name) {
-            if(name.trim()) {
-                currentProject.name = name;
-                saveData();
-            }
+            if(name.trim()) { currentProject.name = name; saveData(); }
         }
 
         function saveData() {
             try {
                 localStorage.setItem('nebula_ultra_projects', JSON.stringify(projects));
                 updateProjectStats();
-            } catch(e) { alert("Storage Full!"); }
+            } catch(e) { alert("Storage Full! Cannot save."); }
         }
 
         function captureThumbnail() {
@@ -1184,46 +1010,181 @@ el.innerText = greet();`
             const json = JSON.stringify(currentProject);
             const compressed = LZString.compressToEncodedURIComponent(json);
             const url = window.location.origin + window.location.pathname + '?data=' + compressed;
-            if(url.length > 8000) return alert("Project too big to link.");
-            navigator.clipboard.writeText(url).then(() => alert("Link Copied!"));
+            if(url.length > 8000) return alert("Project too big to link via URL.");
+            navigator.clipboard.writeText(url).then(() => { setStatus("Link Copied!", 3000); });
         }
 
-        function loadShared() {
-            const params = new URLSearchParams(window.location.search);
-            const data = params.get('data');
-            if(data) {
-                try {
-                    const p = JSON.parse(LZString.decompressFromEncodedURIComponent(data));
-                    p.id = 'import-' + Date.now();
-                    p.name += " (Shared)";
-                    projects.unshift(p);
-                    saveData();
-                    openProject(p.id);
-                    window.history.replaceState({},'',window.location.pathname);
-                } catch(e) { console.error(e); }
+        function exportProject() {
+            const zip = new JSZip();
+            currentProject.files.forEach(f => {
+                if(f.type === 'folder') { zip.folder(f.name); return; }
+                if(f.isBinary) {
+                    zip.file(f.name, f.content.split(',')[1], {base64: true});
+                } else {
+                    zip.file(f.name, f.content);
+                }
+            });
+            zip.generateAsync({type:"blob"}).then(function(content) {
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(content);
+                a.download = currentProject.name.replace(/\s+/g, '_') + ".zip";
+                a.click();
+                setStatus("Export Complete", 3000);
+            });
+        }
+
+        // --- GIT INTEGRATION (REST API) ---
+        dom.gitPat = document.getElementById('git-pat');
+        dom.gitRepo = document.getElementById('git-repo');
+        dom.gitBranch = document.getElementById('git-branch');
+        dom.gitMsg = document.getElementById('git-msg');
+
+        function toggleGitModal() {
+            dom.gitModal.style.display = dom.gitModal.style.display === 'flex' ? 'none' : 'flex';
+        }
+
+        async function gitApi(endpoint, method='GET', body=null) {
+            const pat = dom.gitPat.value.trim();
+            localStorage.setItem('nebula_git_pat', pat); // Save PAT locally
+            const headers = { 'Accept': 'application/vnd.github.v3+json' };
+            if(pat) headers['Authorization'] = `token ${pat}`;
+            
+            const options = { method, headers };
+            if(body) options.body = JSON.stringify(body);
+            
+            const res = await fetch(`https://api.github.com/repos/${dom.gitRepo.value}/${endpoint}`, options);
+            if(!res.ok) throw new Error(await res.text());
+            return res.json();
+        }
+
+        async function gitPull() {
+            try {
+                setStatus("Pulling from GitHub...");
+                currentProject.gitRepo = dom.gitRepo.value;
+                const branch = dom.gitBranch.value || 'main';
+                
+                // Get Tree
+                const treeRes = await gitApi(`git/trees/${branch}?recursive=1`);
+                
+                currentProject.files = []; // Wipe current files
+                
+                for(let item of treeRes.tree) {
+                    if(item.type === 'tree') {
+                        currentProject.files.push({ name: item.path, type: 'folder' });
+                        expandedFolders.add(item.path);
+                    } else if(item.type === 'blob') {
+                        // Fetch Blob Content
+                        const blobRes = await gitApi(`git/blobs/${item.sha}`);
+                        const isText = !item.path.match(/\.(png|jpg|jpeg|gif|ico|mp3|wav|glb)$/i);
+                        let content = '';
+                        let isBinary = false;
+                        
+                        if(blobRes.encoding === 'base64') {
+                            if(isText) {
+                                content = decodeURIComponent(escape(window.atob(blobRes.content)));
+                            } else {
+                                content = `data:application/octet-stream;base64,${blobRes.content.replace(/\n/g, '')}`;
+                                isBinary = true;
+                            }
+                        } else {
+                            content = blobRes.content;
+                        }
+
+                        currentProject.files.push({
+                            name: item.path,
+                            type: 'file',
+                            content: content,
+                            isBinary: isBinary,
+                            strategy: item.path.endsWith('.js') ? 'module' : 'classic'
+                        });
+                    }
+                }
+                
+                saveData();
+                renderFileList();
+                loadEditor();
+                toggleGitModal();
+                setStatus("Pull Complete!", 4000);
+            } catch(e) {
+                console.error(e);
+                alert("GitHub Pull Failed: " + e.message);
+                setStatus("Pull Failed.");
             }
         }
 
-        function logToConsole(type, msg) {
+        async function gitPush() {
+            try {
+                setStatus("Pushing to GitHub...");
+                const branch = dom.gitBranch.value || 'main';
+                const msg = dom.gitMsg.value || 'Update via Nebula Studio Ultra';
+                
+                // 1. Get Ref
+                const ref = await gitApi(`git/refs/heads/${branch}`);
+                const commitSha = ref.object.sha;
+                
+                // 2. Get Commit
+                const commit = await gitApi(`git/commits/${commitSha}`);
+                const baseTreeSha = commit.tree.sha;
+                
+                // 3. Create Blobs
+                const newTree = [];
+                for(let f of currentProject.files) {
+                    if(f.type === 'folder') continue;
+                    
+                    let content = f.content;
+                    let encoding = 'utf-8';
+                    if(f.isBinary) {
+                        content = f.content.split(',')[1];
+                        encoding = 'base64';
+                    }
+                    
+                    const blob = await gitApi('git/blobs', 'POST', { content, encoding });
+                    newTree.push({
+                        path: f.name,
+                        mode: '100644',
+                        type: 'blob',
+                        sha: blob.sha
+                    });
+                }
+                
+                // 4. Create Tree
+                const tree = await gitApi('git/trees', 'POST', { base_tree: baseTreeSha, tree: newTree });
+                
+                // 5. Create Commit
+                const newCommit = await gitApi('git/commits', 'POST', {
+                    message: msg,
+                    tree: tree.sha,
+                    parents: [commitSha]
+                });
+                
+                // 6. Update Ref
+                await gitApi(`git/refs/heads/${branch}`, 'PATCH', { sha: newCommit.sha });
+                
+                toggleGitModal();
+                dom.gitMsg.value = '';
+                setStatus("Push Successful!", 4000);
+            } catch(e) {
+                console.error(e);
+                alert("GitHub Push Failed: " + e.message);
+                setStatus("Push Failed.");
+            }
+        }
+
+        // --- UTILS ---
+        function logToConsole(type, msg, file='', line='') {
             const div = document.createElement('div');
             div.className = `log-entry ${type === 'error' ? 'log-error' : (type === 'warn' ? 'log-warn' : 'log-info')}`;
-            div.innerHTML = `<span class="opacity-50">[${new Date().toLocaleTimeString()}]</span> ${msg}`;
+            let loc = file ? `<span class="text-[10px] text-zinc-500 float-right">${file}${line ? `:${line}`:''}</span>` : '';
+            div.innerHTML = `${loc}<span class="opacity-50">[${new Date().toLocaleTimeString()}]</span> ${msg}`;
             dom.console.appendChild(div);
             dom.console.scrollTop = dom.console.scrollHeight;
         }
 
         function clearConsole() { dom.console.innerHTML = ''; }
         function togglePreview(ext) { if(ext && dom.previewFrame.src) window.open(dom.previewFrame.src, '_blank'); }
-        function closePreview() { dom.previewPanel.style.width = '0%'; }
+        function closePreview() { dom.previewPanel.style.width = '0%'; if(monacoEditorInstance) monacoEditorInstance.layout(); }
 
         // --- EVENTS ---
-        dom.editor.addEventListener('input', updateHighlight);
-        dom.editor.addEventListener('scroll', syncScroll);
-        dom.editor.addEventListener('keydown', e => {
-            if(e.key === 'Tab') { e.preventDefault(); dom.editor.setRangeText("  ", dom.editor.selectionStart, dom.editor.selectionEnd, "end"); updateHighlight(); }
-            if((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); runProject(); }
-        });
-
         dom.strategy.addEventListener('change', (e) => {
             const f = currentProject.files.find(x => x.name === activeFileName);
             if(f) { f.strategy = e.target.value; saveData(); }
@@ -1237,16 +1198,11 @@ el.innerText = greet();`
                     const path = file.webkitRelativePath || file.name;
                     if(!currentProject.files.some(f => f.name === path)) {
                         currentProject.files.push({
-                            name: path,
-                            type: 'file',
-                            content: ev.target.result,
-                            isBinary,
+                            name: path, type: 'file', content: ev.target.result, isBinary,
                             strategy: path.endsWith('.js') ? 'module' : 'classic'
                         });
                     }
-                    saveData();
-                    renderFileList();
-                    updateProjectStats();
+                    saveData(); renderFileList();
                 };
                 if(isBinary) reader.readAsDataURL(file); else reader.readAsText(file);
             });
@@ -1255,27 +1211,42 @@ el.innerText = greet();`
 
         window.addEventListener('message', e => {
             if(e.data.type === 'log') logToConsole('info', e.data.msg);
-            if(e.data.type === 'error') logToConsole('error', e.data.msg);
+            if(e.data.type === 'error') logToConsole('error', e.data.msg, e.data.file, e.data.line);
         });
 
-        // Init
-        window.addEventListener('DOMContentLoaded', () => {
-            if(window.location.search.includes('data=')) loadShared();
-            else renderProjectGrid();
-        });
-        
         let isResizing = false;
         dom.resizer.addEventListener('mousedown', () => isResizing = true);
         document.addEventListener('mousemove', e => {
             if(!isResizing) return;
             const w = document.body.clientWidth - e.clientX;
             const p = (w / document.body.clientWidth) * 100;
-            if(p > 10 && p < 90) dom.previewPanel.style.width = p + '%';
+            if(p > 10 && p < 90) {
+                dom.previewPanel.style.width = p + '%';
+                if(monacoEditorInstance) monacoEditorInstance.layout();
+            }
         });
         document.addEventListener('mouseup', () => isResizing = false);
+        window.addEventListener('resize', () => { if(monacoEditorInstance) monacoEditorInstance.layout(); });
+
+        // Init
+        window.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            const data = params.get('data');
+            if(data) {
+                try {
+                    const p = JSON.parse(LZString.decompressFromEncodedURIComponent(data));
+                    p.id = 'import-' + Date.now(); p.name += " (Shared)";
+                    projects.unshift(p); saveData(); openProject(p.id);
+                    window.history.replaceState({},'',window.location.pathname);
+                } catch(e) { console.error(e); renderProjectGrid(); }
+            } else {
+                renderProjectGrid();
+            }
+        });
     </script>
 </body>
 </html>
+
 
 
 
